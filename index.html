@@ -247,7 +247,8 @@
     <div class="farmcard" onclick="selectFarm('kiambu', this)"><b>Kiambu Plot</b><span>0.8 acres · 3 zones · Tomatoes, cabbage, maize</span></div>
     <div class="farmcard" onclick="selectFarm('nakuru', this)"><b>Nakuru Farm</b><span>2.1 acres · 2 zones · Beans, potatoes</span></div>
     <div class="farmcard" onclick="selectFarm('machakos', this)"><b>Machakos Highlands</b><span>1.4 acres · 1 zone · Sorghum</span></div>
-
+    
+    <button class="btn ghost block" style="margin-top:10px;" onclick="startTour()">▶ Replay App Tutorial</button>
     <button class="btn ghost block" style="margin-top:6px;" onclick="alert('Signed out.')">Log out</button>
   </div>
 
@@ -929,6 +930,8 @@ async function sendChat(text){
   renderImpact(); renderHistory();
 })();
 </script>
+  <!-- Include your modular tour script -->
+  <script src="tour.js"></script>
 
 </body>
 </html>
