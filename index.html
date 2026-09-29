@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Smart Irrigation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --soil:#2B2118; --soil2:#3A2C1E; --parchment:#F1EADD; --paper:#FBF8F1;
+    --leaf:#7CB518; --leaf-dk:#5C8A11; --marigold:#D98E04; --rust:#C1440E;
+    --ink:#241A10; --line:#5A4938; --muted:#B9AA92;
+    padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px);
+    box-sizing:border-box;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; font-family:'Work Sans',sans-serif; color:var(--ink);
+    background:repeating-linear-gradient(115deg, #241C13 0px, #241C13 2px, #2B2118 2px, #2B2118 46px);
+    display:flex; align-items:flex-start; justify-content:center;
+    min-height:100vh; padding:28px 12px;
+  }
+  h1,h2,h3,.serif{font-family:'Fraunces',serif;}
+  .phone{width:100%; max-width:400px; background:var(--paper); border-radius:28px; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,.45); border:1px solid #000; position:relative;}
+  .almanac{background:var(--soil); color:var(--parchment); padding:18px 20px 16px; display:flex; justify-content:space-between; align-items:flex-start;}
+  .almanac .date{font-size:12px; letter-spacing:.03em; color:var(--muted); margin-bottom:2px;}
+  .almanac .place{font-family:'Fraunces',serif; font-size:22px; font-weight:600; background:none; border:none; color:var(--parchment); padding:0; cursor:pointer; display:inline-flex; align-items:center; gap:4px;}
+  .avatar{width:28px; height:28px; border-radius:50%; background:var(--leaf); color:var(--soil); border:none; font-size:11px; font-weight:700; font-family:'Work Sans'; cursor:pointer; margin-bottom:6px;}
+  .avatar.big{width:64px; height:64px; font-size:22px; margin-bottom:0;}
+  .profile-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #E4DAC5; font-size:12.5px;}
+  .profile-row:last-child{border-bottom:none;}
+  .profile-row span.v{color:var(--line); font-weight:600;}
+  .toggle-sw{width:36px; height:20px; border-radius:10px; background:var(--leaf); position:relative; cursor:pointer; flex:none;}
+  .toggle-sw.off{background:#D9CDB3;}
+  .toggle-sw::after{content:''; position:absolute; top:2px; left:18px; width:16px; height:16px; border-radius:50%; background:var(--paper); transition:left .15s;}
+  .toggle-sw.off::after{left:2px;}
+  .farmcard{background:#EDE6D6; border-radius:14px; padding:14px 16px; margin-bottom:12px; cursor:pointer; border:2px solid transparent;}
+  .farmcard.current{border-color:var(--leaf);}
+  .farmcard b{font-family:'Fraunces',serif; font-size:16px; display:block;}
+  .farmcard span{font-size:11px; color:var(--line);}
+  .farmcard .tag{float:right; font-size:9.5px; background:var(--leaf); color:var(--soil); border-radius:8px; padding:2px 8px; font-weight:700;}
+  .weather{text-align:right; cursor:pointer;}
+  .weather .temp{font-family:'Fraunces',serif; font-size:26px; font-weight:600;}
+  .weather .cond{font-size:12px; color:var(--muted);}
+  .langtoggle{display:inline-flex; margin-top:8px; border:1px solid var(--line); border-radius:20px; overflow:hidden;}
+  .langtoggle button{background:none; border:none; color:var(--muted); font-size:11px; padding:4px 10px; cursor:pointer; font-family:'Work Sans';}
+  .langtoggle button.active{background:var(--leaf); color:var(--soil); font-weight:600;}
+
+  .screen{display:none; padding:18px 20px 10px;}
+  .screen.active{display:block;}
+
+  /* ---- Home ---- */
+  .ring-card{background:var(--soil2); color:var(--parchment); border-radius:18px; padding:18px; display:flex; align-items:center; gap:16px; margin-bottom:18px;}
+  .ring{width:78px; height:78px; border-radius:50%; flex:none; background:conic-gradient(var(--leaf) 0turn 0.62turn, #4a3b28 0.62turn 1turn); display:flex; align-items:center; justify-content:center;}
+  .ring-inner{width:58px; height:58px; border-radius:50%; background:var(--soil2); display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .ring-inner b{font-family:'Fraunces',serif; font-size:16px;}
+  .ring-inner span{font-size:9px; color:var(--muted);}
+  .ring-text .label{font-size:11px; color:var(--muted); text-transform:none;}
+  .ring-text .value{font-family:'Fraunces',serif; font-size:17px; margin:2px 0 6px;}
+  .battery-line{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted);}
+  .battery-bar{width:44px; height:8px; border:1px solid var(--muted); border-radius:2px; overflow:hidden;}
+  .battery-fill{width:82%; height:100%; background:var(--leaf);}
+
+  h2.section{font-size:13px; color:var(--line); font-weight:600; margin:0 0 10px; display:flex; justify-content:space-between; align-items:center;}
+  h2.section a{font-size:11px; color:var(--leaf-dk); text-decoration:none; font-family:'Work Sans'; font-weight:600;}
+
+  .jars{display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; margin-bottom:20px;}
+  .jar{flex:none; width:100px; cursor:pointer; border:none; background:none; font-family:'Work Sans'; text-align:left; padding:0;}
+  .jar-glass{width:74px; height:88px; border:2px solid var(--line); border-radius:8px 8px 14px 14px; position:relative; overflow:hidden; background:#EDE6D6; margin-bottom:6px;}
+  .jar-fill{position:absolute; bottom:0; left:0; right:0; background:var(--leaf); opacity:.75;}
+  .jar-ph{position:absolute; top:4px; left:0; right:0; text-align:center; font-size:10px; font-weight:700; color:var(--soil);}
+  .jar-name{font-size:12px; font-weight:600;}
+  .jar-sub{font-size:10px; color:var(--line); opacity:.7;}
+
+  .note{background:#EDE6D6; border-left:4px solid var(--marigold); border-radius:4px 10px 10px 4px; padding:14px 16px; margin-bottom:16px;}
+  .note b{font-family:'Fraunces',serif; font-size:14px;}
+  .note p{margin:6px 0 10px; font-size:12.5px; line-height:1.5;}
+  .note .cost{font-size:12px; font-weight:600; color:var(--leaf-dk);}
+
+  .btn{display:inline-block; background:var(--leaf); color:var(--soil); border:none; border-radius:24px; padding:11px 18px; font-weight:600; font-size:13px; cursor:pointer; font-family:'Work Sans';}
+  .btn.ghost{background:none; border:1.5px solid var(--line); color:var(--ink);}
+  .btn.block{display:block; width:100%; text-align:center;}
+
+  /* ---- Zone detail ---- */
+  .back{background:none; border:none; font-size:13px; color:var(--line); cursor:pointer; margin-bottom:10px; padding:0; font-family:'Work Sans'; font-weight:600;}
+  .gauges{display:flex; gap:10px; margin-bottom:16px;}
+  .gauge{flex:1; background:#EDE6D6; border-radius:12px; padding:12px; text-align:center;}
+  .gauge b{display:block; font-family:'Fraunces',serif; font-size:20px;}
+  .gauge span{font-size:10px; color:var(--line);}
+  .gauge.warn b{color:var(--rust);}
+  .timeline{border-left:2px solid var(--line); padding-left:14px; margin:0 0 18px 4px;}
+  .tl-item{position:relative; margin-bottom:14px; font-size:12px;}
+  .tl-item::before{content:''; position:absolute; left:-19px; top:3px; width:8px; height:8px; border-radius:50%; background:var(--leaf);}
+  .tl-item b{display:block; font-size:12.5px;}
+  .tl-item span{color:var(--line); opacity:.75; font-size:11px;}
+
+  /* ---- Scan screen ---- */
+  .viewfinder{aspect-ratio:1/1; border-radius:16px; border:2px dashed var(--muted); background:linear-gradient(160deg,#3d5a1f,#2e4417); display:flex; align-items:center; justify-content:center; margin-bottom:14px; position:relative; overflow:hidden;}
+  .viewfinder svg{width:70px; height:70px; opacity:.85;}
+  .viewfinder .hint{position:absolute; bottom:10px; left:0; right:0; text-align:center; color:#EDE6D6; font-size:11px; text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .result-card{background:#EDE6D6; border-radius:14px; padding:16px; margin-top:6px;}
+  .conf{display:inline-block; background:var(--marigold); color:var(--soil); font-size:11px; font-weight:700; border-radius:12px; padding:2px 10px; margin-bottom:8px;}
+  .result-card h3{margin:0 0 6px; font-size:17px;}
+  .result-card p{font-size:12.5px; line-height:1.5; margin:0 0 10px;}
+
+  /* ---- Alerts ---- */
+  .alert{display:flex; gap:12px; padding:13px 0; border-bottom:1px solid #E4DAC5;}
+  .alert:last-child{border-bottom:none;}
+  .a-icon{width:34px; height:34px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:15px;}
+  .a-icon.critical{background:var(--rust); color:#fff;}
+  .a-icon.warn{background:var(--marigold); color:var(--soil);}
+  .a-icon.info{background:var(--leaf); color:var(--soil);}
+  .alert b{font-size:12.5px; display:block;}
+  .alert span{font-size:11px; color:var(--line); opacity:.8;}
+  .sms-tag{font-size:9.5px; background:var(--soil); color:var(--parchment); border-radius:8px; padding:1px 6px; margin-left:6px;}
+
+  /* ---- Ledger ---- */
+  .calc{background:#EDE6D6; border-radius:14px; padding:16px; margin-bottom:16px;}
+  .calc label{font-size:11px; color:var(--line); display:block; margin-bottom:4px;}
+  .calc input{width:100%; border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; font-family:'Work Sans';}
+  .calc .total{display:flex; justify-content:space-between; font-family:'Fraunces',serif; font-size:16px; border-top:1px dashed var(--muted); padding-top:10px;}
+  .stage-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .stage-track{flex:1; height:6px; background:#DED2B6; border-radius:3px; margin:0 10px; position:relative;}
+  .stage-fill{position:absolute; left:0; top:0; height:100%; background:var(--leaf); border-radius:3px; width:58%;}
+  .stage-row .lbl{font-size:11px; width:64px;}
+  .stage-row .pct{font-size:11px; width:34px; text-align:right; color:var(--line);}
+
+  .chips{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
+  .chip{background:#EDE6D6; border:1.5px solid var(--line); color:var(--ink); border-radius:16px; padding:6px 13px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:'Work Sans';}
+  .chip.active{background:var(--leaf); border-color:var(--leaf); color:var(--soil);}
+  .report-row{display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid #E4DAC5; font-size:12px;}
+  .report-row:last-child{border-bottom:none;}
+  .report-row span.v{font-weight:600;}
+  .pl-card{background:var(--soil2); color:var(--parchment); border-radius:14px; padding:16px; margin-bottom:16px;}
+  .pl-card .row{display:flex; justify-content:space-between; font-size:12px; padding:5px 0; color:var(--muted);}
+  .pl-card .total{display:flex; justify-content:space-between; font-family:'Fraunces',serif; font-size:20px; border-top:1px dashed var(--line); margin-top:6px; padding-top:10px; color:var(--leaf);}
+
+  /* ---- Nav ---- */
+  nav{display:flex; align-items:center; justify-content:space-around; background:var(--soil); padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px));}
+  nav button{background:none; border:none; color:var(--muted); font-size:9.5px; font-family:'Work Sans'; font-weight:600; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;}
+  nav button.active{color:var(--leaf);}
+  nav svg{width:19px; height:19px;}
+  .fab{width:50px; height:50px; border-radius:50%; background:var(--leaf); color:var(--soil); display:flex; align-items:center; justify-content:center; margin-top:-26px; border:4px solid var(--soil); flex:none;}
+  .fab svg{width:22px; height:22px;}
+  @keyframes pulse{0%{opacity:1}50%{opacity:.25}100%{opacity:1}}
+  @keyframes slidein{from{opacity:0; transform:translateY(-8px);}to{opacity:1; transform:translateY(0);}}
+  .live{display:inline-flex; align-items:center; gap:5px; font-size:10px; color:var(--leaf); background:none; border:none; cursor:pointer; margin-top:6px; font-family:'Work Sans'; font-weight:700; padding:0;}
+  .live .dot{width:7px; height:7px; border-radius:50%; background:var(--leaf); animation:pulse 1.3s infinite;}
+  .live.paused{color:var(--muted);}
+  .live.paused .dot{background:var(--muted); animation:none;}
+  .pumping{color:var(--marigold) !important; animation:pulse 0.8s infinite;}
+  .new-alert{animation:slidein .4s ease;}
+  .nav-badge{position:absolute; top:-2px; right:6px; width:8px; height:8px; border-radius:50%; background:var(--rust); display:none;}
+  nav button{position:relative;}
+  @media print{
+    body *{visibility:hidden;}
+    .screen{display:none !important;}
+    #screen-reports{display:block !important; visibility:visible; position:absolute; top:0; left:0; width:100%; padding:0;}
+    #screen-reports *{visibility:visible;}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="almanac">
+    <div>
+      <button class="avatar" onclick="go('profile')">JK</button>
+      <div class="date" id="lbl-date">Tue 29 Sep</div>
+      <button class="place" id="lbl-place" onclick="go('farms')">Kiambu Plot <svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:2px;" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M8 9l4 4 4-4"/></svg></button>
+      <div class="langtoggle">
+        <button class="active" onclick="setLang('en',this)">EN</button>
+        <button onclick="setLang('sw',this)">SW</button>
+      </div>
+    </div>
+    <div class="weather">
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+        <span id="weather-icon" style="font-size:20px;">⛅</span>
+        <div class="temp" id="lbl-temp">22°</div>
+      </div>
+      <div class="cond" id="lbl-rain">Checking forecast...</div>
+      <button class="live" id="live-toggle" onclick="event.stopPropagation(); toggleSim()"><span class="dot"></span>LIVE</button>
+    </div>
+  </div>
+
+  <!-- HOME -->
+  <div class="screen active" id="screen-home">
+    <div class="ring-card">
+      <div class="ring" id="ring"><div class="ring-inner"><b id="moisture-val">62%</b><span>MOISTURE</span></div></div>
+      <div class="ring-text">
+        <div class="label" id="lbl-lastwater">Last watered</div>
+        <div class="value" id="irrigation-status">Today, 6:02am · 12min</div>
+        <div class="battery-line">Solar battery <div class="battery-bar"><div class="battery-fill" id="battery-fill" style="width:82%;"></div></div> <span id="battery-val">82%</span></div>
+      </div>
+    </div>
+
+    <h2 class="section"><span id="lbl-fields">Your fields</span> <a href="#" onclick="go('zone'); return false;">Manage zones →</a></h2>
+    <div class="jars" id="jars-list">
+      <button class="jar" onclick="go('zone')">
+        <div class="jar-glass"><div class="jar-ph">pH 6.4</div><div class="jar-fill" style="height:64%;"></div></div>
+        <div class="jar-name">Zone A</div><div class="jar-sub">Tomatoes</div>
+      </button>
+      <button class="jar" onclick="go('zone')">
+        <div class="jar-glass"><div class="jar-ph" style="color:#8a3a00;">pH 5.1</div><div class="jar-fill" style="height:31%; background:var(--rust);"></div></div>
+        <div class="jar-name">Zone B</div><div class="jar-sub">Cabbage</div>
+      </button>
+      <button class="jar" onclick="go('zone')">
+        <div class="jar-glass"><div class="jar-ph">pH 6.8</div><div class="jar-fill" style="height:78%;"></div></div>
+        <div class="jar-name">Zone C</div><div class="jar-sub">Maize</div>
+      </button>
+    </div>
+
+    <h2 class="section" id="lbl-rec">Today's note</h2>
+    <div class="note">
+      <b>Zone B soil is acidic</b>
+      <p>pH has dropped to 5.1 — below what cabbage needs. Add agricultural lime before your next planting round.</p>
+      <div class="cost">Est. cost for your plot size: KSh <span id="home-cost">850</span></div>
+      <button class="btn ghost" onclick="go('ledger')">Open cost calculator</button>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="screen" id="screen-profile">
+    <button class="back" onclick="go('home')">← Field</button>
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:18px;">
+      <button class="avatar big" onclick="alert('Change profile photo')">JK</button>
+      <div>
+        <div class="serif" style="font-size:18px; font-weight:600;">John Kamau</div>
+        <div style="font-size:11.5px; color:var(--line);">+254 712 345 678</div>
+      </div>
+    </div>
+
+    <h2 class="section">Farmer details</h2>
+    <div class="profile-row"><span>Farmer ID</span><span class="v">KE-FM-04821</span></div>
+    <div class="profile-row"><span>Preferred language</span><span class="v">English</span></div>
+    <div class="profile-row"><span>Farms owned</span><span class="v">3</span></div>
+    <div class="profile-row"><span>Total zones</span><span class="v">6</span></div>
+
+    <h2 class="section" style="margin-top:16px;">Notifications</h2>
+    <div class="profile-row"><span>SMS alerts (no data needed)</span><div class="toggle-sw" onclick="this.classList.toggle('off')"></div></div>
+    <div class="profile-row"><span>Push notifications</span><div class="toggle-sw" onclick="this.classList.toggle('off')"></div></div>
+    <div class="profile-row"><span>Weekly report by SMS</span><div class="toggle-sw off" onclick="this.classList.toggle('off')"></div></div>
+
+    <h2 class="section" style="margin-top:16px;">Farms</h2>
+    <div class="farmcard" onclick="selectFarm('kiambu', this)"><b>Kiambu Plot</b><span>0.8 acres · 3 zones · Tomatoes, cabbage, maize</span></div>
+    <div class="farmcard" onclick="selectFarm('nakuru', this)"><b>Nakuru Farm</b><span>2.1 acres · 2 zones · Beans, potatoes</span></div>
+    <div class="farmcard" onclick="selectFarm('machakos', this)"><b>Machakos Highlands</b><span>1.4 acres · 1 zone · Sorghum</span></div>
+
+    <button class="btn ghost block" style="margin-top:6px;" onclick="alert('Signed out.')">Log out</button>
+  </div>
+
+  <!-- MY FARMS -->
+  <div class="screen" id="screen-farms">
+    <button class="back" onclick="go('home')">← Field</button>
+    <h1 class="serif" style="margin:0 0 14px; font-size:20px;">My farms</h1>
+    <div class="farmcard current" onclick="selectFarm('kiambu', this)">
+      <span class="tag">Viewing</span>
+      <b>Kiambu Plot</b>
+      <span>3 zones · Tomatoes, cabbage, maize</span>
+    </div>
+    <div class="farmcard" onclick="selectFarm('nakuru', this)">
+      <b>Nakuru Farm</b>
+      <span>2 zones · Beans, potatoes · 1 alert</span>
+    </div>
+    <div class="farmcard" onclick="selectFarm('machakos', this)">
+      <b>Machakos Highlands</b>
+      <span>1 zone · Sorghum · low battery</span>
+    </div>
+    <button class="btn ghost block" onclick="alert('Add a new farm: name it, set its location, and register its first ESP32 node.')">+ Add another farm</button>
+  </div>
+
+  <!-- ZONE DETAIL -->
+  <div class="screen" id="screen-zone">
+    <button class="back" onclick="go('home')">← Field</button>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <h1 class="serif" style="margin:0 0 2px; font-size:20px;">Zone B — Cabbage</h1>
+        <div style="font-size:11px; color:var(--line); margin-bottom:14px;">Planted 34 days ago · Node #ESP-002</div>
+      </div>
+      <button class="btn ghost" style="font-size:11.5px; padding:8px 12px;" id="read-now-btn" onclick="readNow()">↻ Read now</button>
+    </div>
+    <div class="gauges">
+      <div class="gauge warn" id="gauge-ph"><b>5.1</b><span>SOIL pH</span></div>
+      <div class="gauge" id="gauge-moisture"><b>31%</b><span>MOISTURE</span></div>
+      <div class="gauge" id="gauge-temp"><b>24°C</b><span>TEMP</span></div>
+    </div>
+    <div class="battery-line" style="margin-bottom:16px;">Shared water tank <div class="battery-bar" style="width:100px;"><div class="battery-fill" id="tank-fill" style="width:34%; background:var(--marigold);"></div></div> <span id="tank-val">34%</span></div>
+    <button class="btn block" style="margin-bottom:18px;" onclick="alert('Irrigation started for Zone B — 10 min cycle.')">Irrigate now</button>
+    <h2 class="section">History</h2>
+    <div class="timeline" id="zone-timeline">
+      <div class="tl-item"><b>Irrigated · 10 min</b><span>Today, 6:02am</span></div>
+      <div class="tl-item"><b>pH dropped to 5.1</b><span>Yesterday, 2:14pm</span></div>
+      <div class="tl-item"><b>Lime applied · 4kg</b><span>12 days ago</span></div>
+      <div class="tl-item"><b>Zone planted — cabbage</b><span>34 days ago</span></div>
+    </div>
+  </div>
+
+  <!-- SCAN -->
+  <div class="screen" id="screen-scan">
+    <h1 class="serif" style="margin:0 0 4px; font-size:20px;">Leaf doctor</h1>
+    <div style="font-size:12px; color:var(--line); margin-bottom:14px;">Point your camera at an affected leaf, in daylight.</div>
+    <div class="viewfinder">
+      <img id="scan-preview" alt="" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:14px;">
+      <svg id="scan-icon" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.5"><path d="M17 8C8 10 5 17 4 21c9-1 13-6 13-13z"/><path d="M17 8c1.5-3 1-5 1-5s-3.5.5-5 3"/></svg>
+      <div class="hint" id="scan-hint">Hold 15cm away, avoid shadows</div>
+    </div>
+    <input type="file" id="file-camera" accept="image/*" capture="environment" hidden>
+    <input type="file" id="file-gallery" accept="image/*" hidden>
+    <div style="display:flex; gap:10px; margin-bottom:16px;">
+      <button class="btn block" style="flex:1;" onclick="document.getElementById('file-camera').click()">Take photo</button>
+      <button class="btn ghost block" style="flex:1;" onclick="document.getElementById('file-gallery').click()">Upload photo</button>
+    </div>
+    <div class="result-card">
+      <span class="conf" id="scan-conf">Sample result</span>
+      <h3 id="scan-title">Early blight</h3>
+      <p id="scan-crop" style="opacity:.75; margin-bottom:6px;">Crop: Tomato</p>
+      <p id="scan-desc">Dark concentric spots on lower leaves, common in tomato and potato during humid spells.</p>
+      <p><b>Treatment:</b> <span id="scan-treat">remove affected leaves, apply copper-based fungicide, avoid overhead watering for 5 days.</span></p>
+      <p style="font-size:11px; opacity:.7;">AI guidance only. For serious cases, confirm with your agricultural extension officer.</p>
+      <div style="display:flex; gap:8px;">
+        <button class="btn ghost" style="flex:1;" onclick="go('alerts')">Notify nearby farmers</button>
+        <button class="btn ghost" style="flex:1;" onclick="shareScan()">Share via WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div class="screen" id="screen-alerts">
+    <h1 class="serif" style="margin:0 0 14px; font-size:20px;">Alerts</h1>
+    <div id="alerts-list">
+    <div class="alert">
+      <div class="a-icon critical">!</div>
+      <div style="flex:1;">
+        <b>Pump running, moisture not rising<span class="sms-tag">SMS</span></b>
+        <span>Zone C · check the water line · 8 min ago</span>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+          <div style="width:40px; height:30px; border-radius:4px; background:linear-gradient(160deg,#4a3b28,#2e4417); flex:none;"></div>
+          <span style="font-size:10.5px; color:var(--leaf-dk);">Field camera auto-captured a photo of the pipe</span>
+        </div>
+      </div>
+    </div>
+    <div class="alert">
+      <div class="a-icon warn">☀</div>
+      <div><b>Late blight found 3km away</b><span>Outbreak map · protect Zone A tomatoes</span></div>
+    </div>
+    <div class="alert">
+      <div class="a-icon warn">⚡</div>
+      <div><b>Solar panel partly shaded</b><span>Node #ESP-002 · battery 82% · clear debris from panel</span></div>
+    </div>
+    <div class="alert">
+      <div class="a-icon info">✓</div>
+      <div><b>Irrigation skipped — rain forecast</b><span>Zone A · saved ~40L water</span></div>
+    </div>
+    </div>
+  </div>
+
+  <!-- LEDGER -->
+  <div class="screen" id="screen-ledger">
+    <h1 class="serif" style="margin:0 0 14px; font-size:20px;">Ledger</h1>
+    <h2 class="section">Cost calculator</h2>
+    <div class="calc">
+      <label>Amendment</label>
+      <input value="Agricultural lime — Zone B" readonly>
+      <label>Local price (KSh per kg)</label>
+      <input id="calc-price" value="170">
+      <label>Amount needed (kg)</label>
+      <input id="calc-kg" value="5">
+      <div class="total"><span>Estimated cost</span><span id="calc-total">KSh 850</span></div>
+    </div>
+    <h2 class="section">Harvest tracker — Zone C maize</h2>
+    <div class="stage-row"><span class="lbl">Planted</span><div class="stage-track"><div class="stage-fill" style="width:100%;"></div></div><span class="pct">✓</span></div>
+    <div class="stage-row"><span class="lbl">Growing</span><div class="stage-track"><div class="stage-fill" style="width:58%;"></div></div><span class="pct">58%</span></div>
+    <div class="stage-row"><span class="lbl">Harvest</span><div class="stage-track"><div class="stage-fill" style="width:0%;"></div></div><span class="pct">Oct 17</span></div>
+
+    <div class="note" style="border-left-color:var(--leaf);">
+      <b>Harvest plan — Zone C maize</b>
+      <p><b>Ready:</b> around Oct 17 (18 days) — based on planting date and growth-stage sensor data.<br>
+      <b>Method:</b> hand-harvest recommended — plot size and mixed maturity make machine harvesting inefficient here.</p>
+      <div class="cost" style="margin-bottom:2px;">Est. harvest budget: KSh 4,200</div>
+      <span style="font-size:11px; color:var(--line);">Labor (3 people, 2 days) KSh 3,000 · Transport to market KSh 1,200</span>
+    </div>
+  </div>
+
+  <!-- REPORTS -->
+  <div class="screen" id="screen-reports">
+    <h1 class="serif" style="margin:0 0 2px; font-size:20px;">Reports</h1>
+    <div style="font-size:11px; color:var(--line); margin-bottom:14px;">Kiambu Plot · Last 30 days</div>
+
+    <h2 class="section">Include in report</h2>
+    <div class="chips" id="chips">
+      <button class="chip active" data-tag="ph" onclick="toggleChip(this)">Soil pH</button>
+      <button class="chip active" data-tag="rain" onclick="toggleChip(this)">Rainfall</button>
+      <button class="chip active" data-tag="irrigation" onclick="toggleChip(this)">Irrigation</button>
+      <button class="chip active" data-tag="disease" onclick="toggleChip(this)">Disease scans</button>
+      <button class="chip active" data-tag="finance" onclick="toggleChip(this)">Finances</button>
+    </div>
+
+    <h2 class="section">Preview</h2>
+    <div style="background:#EDE6D6; border-radius:12px; padding:4px 16px; margin-bottom:16px;">
+      <div class="report-row" data-tag="ph"><span>Avg. soil pH (3 zones)</span><span class="v">6.1</span></div>
+      <div class="report-row" data-tag="rain"><span>Rainfall recorded</span><span class="v">86 mm</span></div>
+      <div class="report-row" data-tag="irrigation"><span>Irrigation cycles run</span><span class="v">14 (2 skipped — rain)</span></div>
+      <div class="report-row" data-tag="disease"><span>Disease scans / detections</span><span class="v">9 / 2</span></div>
+      <div class="report-row" data-tag="finance"><span>Total spent this period</span><span class="v">KSh 27,500</span></div>
+    </div>
+
+    <div class="pl-card" id="pl-card">
+      <h2 class="section" style="color:var(--muted); margin-bottom:8px;">Profit &amp; loss</h2>
+      <div class="row"><span>Income (produce sold)</span><span>KSh 42,000</span></div>
+      <div class="row"><span>Lime &amp; fungicide</span><span>−KSh 1,470</span></div>
+      <div class="row"><span>Irrigation &amp; power</span><span>−KSh 800</span></div>
+      <div class="row"><span>Harvest labor &amp; transport</span><span>−KSh 4,200</span></div>
+      <div class="row"><span>Other inputs</span><span>−KSh 21,030</span></div>
+      <div class="total"><span>Net profit</span><span>+KSh 14,500</span></div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn block" style="flex:1;" onclick="window.print()">Print / Save PDF</button>
+      <button class="btn ghost block" style="flex:1;" onclick="downloadCSV()">Download CSV</button>
+    </div>
+  </div>
+
+  <nav>
+    <button class="active" data-s="home" onclick="go('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg>Field</button>
+    <button data-s="ledger" onclick="go('ledger')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Ledger</button>
+    <button class="fab" aria-label="Scan a leaf" onclick="go('scan')" style="cursor:pointer;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2M20 8V6a2 2 0 00-2-2h-2M20 16v2a2 2 0 01-2 2h-2"/><circle cx="12" cy="12" r="3.2"/></svg>
+    </button>
+    <button data-s="alerts" onclick="go('alerts')">
+      <span class="nav-badge" id="alerts-badge"></span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a5 5 0 00-5 5v3l-2 4h14l-2-4V8a5 5 0 00-5-5z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>Alerts</button>
+    <button data-s="reports" onclick="go('reports')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h6M9 17h6"/></svg>Reports</button>
+  </nav>
+</div>
+
+<script>
+const farms = {
+  kiambu:{ name:'Kiambu Plot', lat:-1.17, lon:36.83, jars:[
+      {name:'Zone A',sub:'Tomatoes',ph:'6.4',fill:64,color:''},
+      {name:'Zone B',sub:'Cabbage',ph:'5.1',fill:31,color:'var(--rust)'},
+      {name:'Zone C',sub:'Maize',ph:'6.8',fill:78,color:''}] },
+  nakuru:{ name:'Nakuru Farm', lat:-0.30, lon:36.08, jars:[
+      {name:'Zone A',sub:'Beans',ph:'6.6',fill:70,color:''},
+      {name:'Zone B',sub:'Potatoes',ph:'5.8',fill:44,color:'var(--marigold)'}] },
+  machakos:{ name:'Machakos Highlands', lat:-1.52, lon:37.26, jars:[
+      {name:'Zone A',sub:'Sorghum',ph:'6.2',fill:52,color:''}] }
+};
+
+let curFarm = 'kiambu', lastScan = null, chatHist = [];
+const phone = document.querySelector('.phone');
+const store = {
+  get:(k,d)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? d; }catch(e){ return d; } },
+  set:(k,v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+function selectFarm(id, card){
+  curFarm = id;
+  const f = farms[id];
+  document.getElementById('lbl-place').innerHTML = f.name + ' <svg viewBox="0 0 24 24" width="13" height="13" style="vertical-align:2px;" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M8 9l4 4 4-4"/></svg>';
+  document.getElementById('jars-list').innerHTML = f.jars.map(j=>`
+      <button class="jar" onclick="go('zone')">
+        <div class="jar-glass"><div class="jar-ph" style="${j.color?'color:#8a3a00;':''}">pH ${j.ph}</div><div class="jar-fill" style="height:${j.fill}%; ${j.color?'background:'+j.color+';':''}"></div></div>
+        <div class="jar-name">${j.name}</div><div class="jar-sub">${j.sub}</div>
+      </button>`).join('');
+  document.querySelectorAll('.farmcard').forEach(c=>{
+    c.classList.remove('current');
+    const t = c.querySelector('.tag'); if(t) t.remove();
+  });
+  if(card){
+    card.classList.add('current');
+    card.insertAdjacentHTML('afterbegin', '<span class="tag">Viewing</span>');
+  }
+  loadWeather(id);
+  go('home');
+  if(currentLang==='sw') tr(phone,'sw');
+}
+
+function toggleChip(chip){
+  chip.classList.toggle('active');
+  const tag = chip.dataset.tag;
+  const on = chip.classList.contains('active');
+  document.querySelectorAll('.report-row[data-tag="'+tag+'"]').forEach(r=> r.style.display = on ? 'flex' : 'none');
+  if(tag==='finance') document.getElementById('pl-card').style.display = on ? 'block' : 'none';
+}
+
+function go(s){
+  if(s==='alerts'){ document.getElementById('alerts-badge').style.display='none'; }
+  document.querySelectorAll('.screen').forEach(el=>el.classList.remove('active'));
+  document.getElementById('screen-'+s).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.s===s));
+}
+
+const strings = {
+  en:{date:'Tue 29 Sep', place:'Kiambu Plot', lastwater:'Last watered', fields:'Your fields', rec:"Today's note"},
+  sw:{date:'Jumanne 29 Sep', place:'Shamba la Kiambu', lastwater:'Ilinyunyiziwa mara ya mwisho', fields:'Mashamba yako', rec:'Ujumbe wa leo'}
+};
+
+let currentLang='en', rainSoon=false, weather=null;
+
+async function loadWeather(id){
+  const f = farms[id];
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}`
+      + `&current=temperature_2m,weather_code&hourly=precipitation_probability&forecast_hours=6&timezone=auto`;
+    const d = await (await fetch(url)).json();
+    const probs = d.hourly.precipitation_probability;
+    const hoursAway = probs.findIndex(p => p >= 60);
+    weather = { 
+      temp: Math.round(d.current.temperature_2m), 
+      code: d.current.weather_code,
+      hoursAway 
+    };
+    rainSoon = hoursAway !== -1;
+  }catch(e){
+    weather = null; rainSoon = false;
+  }
+  renderWeather();
+}
+
+function getWeatherDesc(code, sw) {
+  if (code === 0) return { icon: '☀️', en: 'Clear & sunny', sw: 'Jua kali' };
+  if (code >= 1 && code <= 3) return { icon: '⛅', en: 'Partly cloudy', sw: 'Mawingu kiasi' };
+  if (code >= 51 && code <= 67) return { icon: '🌧️', en: 'Rain showers', sw: 'Mvuanyesha' };
+  if (code >= 95) return { icon: '⚡', en: 'Thunderstorm', sw: 'Ngurumo za radi' };
+  return { icon: '☁️', en: 'Cloudy', sw: 'Mawingu' };
+}
+
+function renderWeather(){
+  const tempEl = document.getElementById('lbl-temp');
+  const condEl = document.getElementById('lbl-rain');
+  const iconEl = document.getElementById('weather-icon');
+  const sw = currentLang === 'sw';
+
+  if(!weather){ 
+    tempEl.textContent='--°'; 
+    iconEl.textContent='❓';
+    condEl.textContent = sw ? 'Hali ya hewa haipatikani' : 'Weather unavailable'; 
+    return; 
+  }
+
+  tempEl.textContent = weather.temp + '°';
+  const cond = getWeatherDesc(weather.code, sw);
+  iconEl.textContent = cond.icon;
+
+  if(weather.hoursAway !== -1) {
+    const h = Math.max(1, weather.hoursAway);
+    condEl.textContent = sw ? `Mvua baada ya masaa ${h}` : `Rain in ~${h}h (skipping)`;
+  } else {
+    condEl.textContent = sw ? cond.sw : cond.en;
+  }
+}
+
+function setLang(l, btn){
+  document.querySelectorAll('.langtoggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentLang = l;
+  const s = strings[l];
+  document.getElementById('lbl-date').textContent = s.date;
+  document.getElementById('lbl-lastwater').textContent = s.lastwater;
+  document.getElementById('lbl-fields').textContent = s.fields;
+  document.getElementById('lbl-rec').textContent = s.rec;
+  renderWeather();
+  if(l==='sw') tr(phone,'sw'); else tr(phone,'en');
+}
+
+loadWeather('kiambu');
+
+/* ---- Live sensor simulation ---- */
+let moisture=62, battery=82, simOn=true, tick=0, irrigating=false, irrigTicksLeft=0;
+function paintRing(){
+  document.getElementById('ring').style.background =
+    `conic-gradient(var(--leaf) 0turn ${(moisture/100).toFixed(2)}turn, #4a3b28 ${(moisture/100).toFixed(2)}turn 1turn)`;
+  document.getElementById('moisture-val').textContent = Math.round(moisture)+'%';
+  document.getElementById('battery-fill').style.width = battery+'%';
+  document.getElementById('battery-val').textContent = Math.round(battery)+'%';
+}
+function pushAlert(iconClass, icon, title, sub){
+  const wrap = document.createElement('div');
+  wrap.className='alert new-alert';
+  wrap.innerHTML = `<div class="a-icon ${iconClass}">${icon}</div><div><b>${title}</b><span>${sub}</span></div>`;
+  document.getElementById('alerts-list').prepend(wrap);
+  if(!document.getElementById('screen-alerts').classList.contains('active')){
+    document.getElementById('alerts-badge').style.display='block';
+  }
+  if(currentLang==='sw') tr(wrap, 'sw');
+}
+function simTick(){
+  if(!simOn) return;
+  tick++;
+  if(irrigating){
+    moisture = Math.min(95, moisture + 5);
+    irrigTicksLeft--;
+    document.getElementById('irrigation-status').innerHTML = '<span class="pumping">● Irrigating Zone A…</span>';
+    if(irrigTicksLeft<=0){
+      irrigating=false;
+      tank = Math.max(4, tank - 6);
+      checkTank();
+      document.getElementById('irrigation-status').textContent = 'Just now · 12min cycle';
+      pushAlert('info','✓','Irrigation complete — Zone A', 'Moisture now '+Math.round(moisture)+'%');
+      recordSkip();
+    }
+  } else {
+    moisture = Math.max(24, Math.min(90, moisture + (Math.random()*6-3.4)));
+    battery = Math.max(18, Math.min(96, battery + (Math.random()*3-1.1)));
+    if(moisture < 34 && !rainSoon && Math.random()<0.6){
+      irrigating = true; irrigTicksLeft = 3;
+      pushAlert('warn','💧','Moisture low — irrigation started', 'Zone A · auto-triggered by sensor');
+    }
+  }
+  paintRing();
+  if(tick===5) pushAlert('warn','⚡','Solar charging slowed', 'Cloud cover detected over plot');
+}
+let simInterval = setInterval(simTick, 3000);
+function toggleSim(){
+  simOn = !simOn;
+  const btn = document.getElementById('live-toggle');
+  btn.classList.toggle('paused', !simOn);
+  btn.innerHTML = simOn ? '<span class="dot"></span>LIVE' : '<span class="dot"></span>PAUSED';
+}
+paintRing();
+
+/* ---- Manual read + water tank ---- */
+let tank=34, tankWarned=false;
+function paintZoneGauges(ph, moist, temp){
+  document.querySelector('#gauge-ph b').textContent = ph.toFixed(1);
+  document.querySelector('#gauge-moisture b').textContent = Math.round(moist)+'%';
+  document.querySelector('#gauge-temp b').textContent = Math.round(temp)+'°C';
+  document.getElementById('gauge-ph').classList.toggle('warn', ph<5.6);
+  document.getElementById('tank-fill').style.width = tank+'%';
+  document.getElementById('tank-val').textContent = Math.round(tank)+'%';
+  document.getElementById('tank-fill').style.background = tank<25 ? 'var(--rust)' : 'var(--marigold)';
+}
+function readNow(){
+  const btn = document.getElementById('read-now-btn');
+  btn.textContent = 'Reading…'; btn.disabled = true;
+  setTimeout(()=>{
+    const ph = 5.0 + Math.random()*0.6;
+    const moist = 25 + Math.random()*20;
+    const temp = 22 + Math.random()*5;
+    tank = Math.max(4, tank - (Math.random()*3));
+    paintZoneGauges(ph, moist, temp);
+    const row = document.createElement('div');
+    row.className='tl-item';
+    row.innerHTML = `<b>Manual reading requested</b><span>pH ${ph.toFixed(1)} · moisture ${Math.round(moist)}% · just now</span>`;
+    document.getElementById('zone-timeline').prepend(row);
+    checkTank();
+    btn.textContent = '↻ Read now'; btn.disabled = false;
+  }, 900);
+}
+function checkTank(){
+  if(tank < 20 && !tankWarned){
+    tankWarned = true;
+    pushAlert('critical','⛽','Water tank low — top up needed<span class="sms-tag">SMS</span>', 'Node #ESP-002 · tank at '+Math.round(tank)+'% · refill soon');
+  }
+  if(tank >= 20) tankWarned = false;
+}
+
+/* ---- AI leaf doctor & features extension ---- */
+function resizeImage(file, max=1024){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const scale = Math.min(1, max/Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width*scale); c.height = Math.round(img.height*scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL('image/jpeg', 0.8);
+      resolve({ url, base64: url.split(',')[1] });
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function diagnose(file){
+  if(!file) return;
+  const el = id => document.getElementById(id);
+  el('scan-icon').style.display = 'none';
+  el('scan-preview').style.display = 'block';
+  el('scan-hint').textContent = 'Analysing leaf…';
+  el('scan-conf').textContent = 'Analysing…';
+  el('scan-title').textContent = '…';
+  try{
+    const img = await resizeImage(file);
+    el('scan-preview').src = img.url;
+    const res = await fetch('/.netlify/functions/diagnose', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ image: img.base64 })
+    });
+    if(!res.ok) throw new Error('Server error');
+    const d = await res.json();
+    el('scan-conf').textContent = d.confidence + '% match';
+    el('scan-title').textContent = d.problem;
+    el('scan-crop').textContent = 'Crop: ' + d.crop;
+    el('scan-desc').textContent = d.description;
+    el('scan-treat').textContent = d.treatment;
+    el('scan-hint').textContent = 'Done. Take another photo anytime.';
+    
+    if(typeof saveScan === 'function') saveScan(d);
+
+    if(d.problem.toLowerCase() !== 'healthy' && d.confidence > 0){
+      pushAlert('warn','🍃', d.problem + ' detected on ' + d.crop, 'Leaf doctor scan · just now');
+    }
+  }catch(e){
+    el('scan-conf').textContent = 'Could not analyse';
+    el('scan-title').textContent = 'Try again';
+    el('scan-desc').textContent = 'Check your internet connection and take a clearer, well-lit photo of one leaf.';
+    el('scan-hint').textContent = 'Something went wrong';
+  }
+}
+
+document.getElementById('file-camera').addEventListener('change', e=>{ diagnose(e.target.files[0]); e.target.value=''; });
+document.getElementById('file-gallery').addEventListener('change', e=>{ diagnose(e.target.files[0]); e.target.value=''; });
+
+/* ---- Features: Swahili, Cost Calc, Impact Counter, TTS, CSV, Chat ---- */
+const SW = {
+'Field':'Shamba','Ledger':'Daftari','Alerts':'Tahadhari','Reports':'Ripoti','← Field':'← Shamba',
+'Manage zones →':'Simamia maeneo →','MOISTURE':'UNYEVU','Solar battery':'Betri ya jua',
+'Zone A':'Eneo A','Zone B':'Eneo B','Zone C':'Eneo C','Tomatoes':'Nyanya','Cabbage':'Kabichi','Maize':'Mahindi','Beans':'Maharagwe','Potatoes':'Viazi','Sorghum':'Mtama',
+'Zone B soil is acidic':'Udongo wa Eneo B una asidi','Open cost calculator':'Fungua kikokotoo cha gharama',
+'Leaf doctor':'Daktari wa majani','Point your camera at an affected leaf, in daylight.':'Elekeza kamera kwenye jani lililoathirika, mchana.',
+'Hold 15cm away, avoid shadows':'Shikilia umbali wa sm 15, epuka vivuli','Take photo':'Piga picha','Upload photo':'Pakia picha','Notify nearby farmers':'Arifu wakulima wa karibu',
+'My farms':'Mashamba yangu','Viewing':'Unatazama','+ Add another farm':'+ Ongeza shamba lingine',
+'Zone B — Cabbage':'Eneo B — Kabichi','↻ Read now':'↻ Soma sasa','SOIL pH':'pH YA UDONGO','TEMP':'JOTO','Water tank':'Tanki la maji','Irrigate now':'Nyunyizia sasa','History':'Historia',
+'Cost calculator':'Kikokotoo cha gharama','Amendment':'Kiboreshaji','Local price (KSh per kg)':'Bei ya eneo (KSh kwa kg)','Amount needed (kg)':'Kiasi kinachohitajika (kg)','Estimated cost':'Gharama inayokadiriwa',
+'Harvest tracker — Zone C maize':'Ufuatiliaji wa mavuno — Mahindi Eneo C','Planted':'Imepandwa','Growing':'Inakua','Harvest':'Mavuno',
+'Include in report':'Jumuisha kwenye ripoti','Preview':'Hakiki','Soil pH':'pH ya udongo','Rainfall':'Mvua','Irrigation':'Umwagiliaji','Disease scans':'Skani za magonjwa','Finances':'Fedha',
+'Profit & loss':'Faida na hasara','Net profit':'Faida halisi','Print / Save PDF':'Chapisha / Hifadhi PDF','Download CSV':'Pakua CSV',
+'Log out':'Toka','Farmer details':'Maelezo ya mkulima','Notifications':'Arifa','Farms':'Mashamba','Preferred language':'Lugha unayopendelea',
+'Pump running, moisture not rising':'Pampu inafanya kazi, unyevu haupandi','Late blight found 3km away':'Ugonjwa wa late blight umepatikana km 3 kutoka hapa',
+'Irrigation skipped — rain forecast':'Kunyunyizia kumeahirishwa — mvua inatarajiwa','Moisture low — irrigation started':'Unyevu mdogo — kunyunyizia kumeanza',
+'Irrigation complete — Zone A':'Kunyunyizia kumekamilika — Eneo A','Water tank low — top up needed':'Tanki la maji liko chini — jaza',
+'Water saved':'Maji yaliyookolewa','Money saved':'Pesa zilizookolewa','Ask the farm assistant':'Muulize msaidizi wa shamba','Read alerts aloud':'Soma tahadhari kwa sauti',
+'Scan history':'Historia ya skani','Farm assistant':'Msaidizi wa shamba','Send':'Tuma','This season':'Msimu huu'
+};
+
+const orig = new WeakMap();
+
+function tr(root, to){
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n;
+  while(n = w.nextNode()){
+    const t = n.nodeValue.trim(); if(!t) continue;
+    if(to==='sw'){ const s = SW[t]; if(s){ orig.set(n, n.nodeValue); n.nodeValue = n.nodeValue.replace(t, s); } }
+    else if(orig.has(n)){ n.nodeValue = orig.get(n); orig.delete(n); }
+  }
+}
+
+new MutationObserver(ms=>{ if(currentLang==='sw') ms.forEach(m=>tr(m.target,'sw')); })
+  .observe(phone,{childList:true,subtree:true});
+
+/* ---- Live cost calculator ---- */
+function calcUpdate(){
+  const c = Math.round((+document.getElementById('calc-price').value||0) * (+document.getElementById('calc-kg').value||0));
+  document.getElementById('calc-total').textContent = 'KSh ' + c.toLocaleString();
+  document.getElementById('home-cost').textContent = c.toLocaleString();
+}
+
+/* ---- Water and money saved ---- */
+const LITRES_PER_SKIP = 40, KSH_PER_LITRE = 0.5;
+let impact = store.get('impact', {skips:0}), lastSkip = 0;
+function renderImpact(){
+  document.getElementById('imp-l').textContent = (impact.skips*LITRES_PER_SKIP).toLocaleString() + ' L';
+  document.getElementById('imp-k').textContent = 'KSh ' + Math.round(impact.skips*LITRES_PER_SKIP*KSH_PER_LITRE).toLocaleString();
+}
+function recordSkip(){
+  if(Date.now()-lastSkip < 30000) return;
+  lastSkip = Date.now(); impact.skips++; store.set('impact', impact); renderImpact();
+}
+
+/* ---- Cloud TTS Voice readout with Fallback ---- */
+async function readAlerts(){
+  const noteEl = document.getElementById('voice-note');
+  noteEl.textContent = 'Generating voice...';
+
+  const alerts = [...document.querySelectorAll('#alerts-list .alert')].slice(0, 3);
+  const textCleaned = alerts.map(a => {
+    let b = a.querySelector('b').textContent.replace('SMS','text message');
+    let s = [...a.querySelectorAll('span')].find(x => !x.classList.contains('sms-tag') && !x.closest('b'));
+    return `${b}. ${s ? s.textContent.replace(/·/g, 'and') : ''}`;
+  }).join('. ');
+
+  const sw = currentLang === 'sw';
+  const announcement = sw 
+    ? `Hapa kuna tahadhari zako: ${textCleaned}` 
+    : `Here are your latest alerts: ${textCleaned}`;
+
+  try {
+    const res = await fetch('/.netlify/functions/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: announcement, lang: currentLang })
+    });
+
+    if(!res.ok) throw new Error('Cloud audio failed');
+
+    const blob = await res.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    const audio = new Audio(audioUrl);
+    
+    noteEl.textContent = '';
+    audio.play();
+  } catch(e) {
+    noteEl.textContent = '';
+    fallbackBrowserSpeech(announcement, sw);
+  }
+}
+
+function fallbackBrowserSpeech(text, sw) {
+  if(!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.95; u.pitch = 1.2;
+  u.lang = sw ? 'sw-KE' : 'en-US';
+  speechSynthesis.speak(u);
+}
+
+/* ---- CSV download ---- */
+function downloadCSV(){
+  const rows = [['Item','Value']];
+  document.querySelectorAll('#screen-reports .report-row').forEach(r=>{
+    if(r.style.display!=='none') rows.push([...r.querySelectorAll('span')].map(s=>s.textContent));
+  });
+  document.querySelectorAll('#pl-card .row, #pl-card .total').forEach(r=>rows.push([...r.querySelectorAll('span')].map(s=>s.textContent)));
+  const csv = '\ufeff' + rows.map(r=>r.map(c=>'"'+c.replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'farm-report.csv'; a.click();
+}
+
+/* ---- Scan history + WhatsApp share ---- */
+function saveScan(d){
+  lastScan = d;
+  const h = store.get('scans', []);
+  h.unshift({t:Date.now(), crop:d.crop, problem:d.problem, conf:d.confidence, farm:farms[curFarm].name});
+  store.set('scans', h.slice(0,20)); renderHistory();
+}
+function renderHistory(){
+  const listEl = document.getElementById('scan-history-list');
+  if(!listEl) return;
+  const h = store.get('scans', []);
+  listEl.innerHTML = h.length ? h.map(s=>`<div class="report-row"><span>${s.problem} · ${s.crop}<br><small style="opacity:.7">${s.farm} · ${new Date(s.t).toLocaleDateString()}</small></span><span class="v">${s.conf}%</span></div>`).join('')
+    : '<div style="font-size:12px;color:var(--line)">No scans yet.</div>';
+}
+function shareScan(){
+  const d = lastScan; if(!d){ alert('Take a photo first.'); return; }
+  const msg = `🍃 Leaf doctor alert from ${farms[curFarm].name}: ${d.problem} on ${d.crop} (${d.confidence}% match). Treatment: ${d.treatment}`;
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+
+/* ---- AI farm assistant ---- */
+function bubble(role, text){
+  const d = document.createElement('div');
+  d.style.cssText = `max-width:85%;padding:9px 12px;border-radius:14px;font-size:12.5px;line-height:1.5;margin-bottom:8px;white-space:pre-wrap;${role==='user'?'margin-left:auto;background:var(--leaf);color:var(--soil);':'background:#EDE6D6;'}`;
+  d.textContent = text; document.getElementById('chat-log').append(d); document.getElementById('chat-log').scrollTop = 1e6; return d;
+}
+async function sendChat(text){
+  text = (text || document.getElementById('chat-input').value).trim(); if(!text) return;
+  document.getElementById('chat-input').value = ''; bubble('user', text);
+  chatHist.push({role:'user', text});
+  const wait = bubble('ai', '…');
+  const f = farms[curFarm];
+  try{
+    const res = await fetch('/.netlify/functions/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ messages: chatHist.slice(-10), lang: currentLang, context:{
+        farm: f.name, crops: f.jars.map(j=>`${j.name}: ${j.sub}, soil pH ${j.ph}, moisture ${j.fill}%`).join('; '),
+        weather: weather ? `${weather.temp}°C, ` + (weather.hoursAway===-1 ? 'no rain in 6h' : `rain in ~${weather.hoursAway}h`) : 'unknown',
+        date: new Date().toDateString(), lat: f.lat, lon: f.lon } })
+    });
+    if(!res.ok) throw 0;
+    const { reply } = await res.json();
+    wait.textContent = reply; chatHist.push({role:'model', text:reply});
+  }catch(e){ wait.textContent = 'Could not reach the assistant. Check your connection and try again.'; }
+}
+
+/* ---- Injected UI initialization ---- */
+(function buildExtras(){
+  const anchor = document.getElementById('lbl-rec');
+  if(anchor){
+    anchor.insertAdjacentHTML('beforebegin', `
+      <h2 class="section">This season</h2>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <div class="gauge"><b id="imp-l">0 L</b><span>Water saved</span></div>
+        <div class="gauge"><b id="imp-k">KSh 0</b><span>Money saved</span></div>
+      </div>
+      <button class="btn block" style="margin-bottom:18px;" onclick="go('chat')">💬 Ask the farm assistant</button>`);
+  }
+  const alertsHeading = document.querySelector('#screen-alerts h1');
+  if(alertsHeading){
+    alertsHeading.insertAdjacentHTML('afterend',
+      `<button class="btn ghost" style="font-size:12px;padding:8px 14px;margin-bottom:4px;" onclick="readAlerts()">🔊 Read alerts aloud</button><div id="voice-note" style="font-size:10.5px;color:var(--rust);margin-bottom:8px;"></div>`);
+  }
+  const scanScreen = document.getElementById('screen-scan');
+  if(scanScreen){
+    scanScreen.insertAdjacentHTML('beforeend', `<h2 class="section" style="margin-top:18px;">Scan history</h2><div id="scan-history-list"></div>`);
+  }
+  const chat = document.createElement('div');
+  chat.className = 'screen'; chat.id = 'screen-chat';
+  chat.innerHTML = `
+    <button class="back" onclick="go('home')">← Field</button>
+    <h1 class="serif" style="margin:0 0 10px;font-size:20px;">Farm assistant</h1>
+    <div class="chips">
+      <button class="chip" onclick="sendChat('When should I plant maize here?')">When to plant?</button>
+      <button class="chip" onclick="sendChat('How do I fix acidic soil in my zones?')">Fix acidic soil</button>
+      <button class="chip" onclick="sendChat('Give me a planting calendar for the next 3 months for this farm.')">Planting calendar</button>
+      <button class="chip" onclick="sendChat('What are typical market prices for my crops in Kenya right now? Say clearly they are estimates.')">Market prices</button>
+    </div>
+    <div id="chat-log" style="height:260px;overflow-y:auto;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input id="chat-input" style="flex:1;border:1px solid var(--line);background:var(--paper);border-radius:20px;padding:9px 14px;font-size:13px;font-family:'Work Sans';" placeholder="Ask about your farm…">
+      <button class="btn" onclick="sendChat()">Send</button>
+    </div>`;
+  document.querySelector('nav').before(chat);
+  
+  const chatInput = document.getElementById('chat-input');
+  if(chatInput) chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+  
+  const calcPrice = document.getElementById('calc-price');
+  const calcKg = document.getElementById('calc-kg');
+  if(calcPrice) calcPrice.addEventListener('input', calcUpdate);
+  if(calcKg) calcKg.addEventListener('input', calcUpdate);
+
+  renderImpact(); renderHistory();
+})();
+</script>
+
+</body>
+</html>
