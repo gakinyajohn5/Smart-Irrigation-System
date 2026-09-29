@@ -1,7 +1,5 @@
 {
   "name": "smart-irrigation",
   "version": "1.0.0",
-  "dependencies": {
-    "@google/generative-ai": "^0.21.0"
-  }
+  "engines": { "node": ">=18" }
 }
