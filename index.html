@@ -779,6 +779,10 @@ async function readAlerts(){
   const noteEl = document.getElementById('voice-note');
   noteEl.textContent = 'Generating voice...';
 
+  // Create the audio player right on the tap so phones allow playback later
+  const audio = new Audio();
+  audio.play().catch(()=>{});
+
   const alerts = [...document.querySelectorAll('#alerts-list .alert')].slice(0, 3);
   const textCleaned = alerts.map(a => {
     let b = a.querySelector('b').textContent.replace('SMS','text message');
@@ -787,8 +791,8 @@ async function readAlerts(){
   }).join('. ');
 
   const sw = currentLang === 'sw';
-  const announcement = sw 
-    ? `Hapa kuna tahadhari zako: ${textCleaned}` 
+  const announcement = sw
+    ? `Hapa kuna tahadhari zako: ${textCleaned}`
     : `Here are your latest alerts: ${textCleaned}`;
 
   try {
@@ -798,29 +802,22 @@ async function readAlerts(){
       body: JSON.stringify({ text: announcement, lang: currentLang })
     });
 
-    if(!res.ok) throw new Error('Cloud audio failed');
+    if(!res.ok){
+      let msg = 'Cloud voice failed';
+      try { msg = (await res.json()).error || msg; } catch(_){}
+      throw new Error(msg);
+    }
 
     const blob = await res.blob();
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    
+    audio.src = URL.createObjectURL(blob);
     noteEl.textContent = '';
-    audio.play();
+    await audio.play();
   } catch(e) {
-    noteEl.textContent = '';
+    console.error('Voice error:', e);
+    noteEl.textContent = 'Cloud voice unavailable: ' + e.message.slice(0, 120);
     fallbackBrowserSpeech(announcement, sw);
   }
 }
-
-function fallbackBrowserSpeech(text, sw) {
-  if(!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.95; u.pitch = 1.2;
-  u.lang = sw ? 'sw-KE' : 'en-US';
-  speechSynthesis.speak(u);
-}
-
 /* ---- CSV download ---- */
 function downloadCSV(){
   const rows = [['Item','Value']];
