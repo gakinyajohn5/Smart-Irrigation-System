@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rootline | Living Digital Twin of a Smart Farm</title>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<style>
+/* ---- Tokens: night-field palette. The sky itself is driven by the sunlight slider ---- */
+:root{color-scheme:dark;--bg:#080c18;--panel:#0e1426;--line:#222c4a;--aqua:#5ef2d6;--sun:#ffc857;--coral:#ff5d73;--leaf:#8be36b;--txt:#e6ecff;--mut:#7d8bb3;
+ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)} html.pres{font-size:18px}
+body{background:var(--bg);color:var(--txt);font-family:'IBM Plex Mono',ui-monospace,monospace}
+h1,h2,.hd{font-family:'Unbounded',sans-serif}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:1rem}
+.lbl{color:var(--mut);font-size:.7rem}
+.btn{border:1px solid var(--line);background:#121a33;padding:.4rem .8rem;font-size:.75rem;border-radius:999px;transition:.15s}
+.btn:hover{border-color:var(--aqua);color:var(--aqua)} .btn.on{background:var(--aqua);color:#04120f;border-color:var(--aqua)}
+#scene{width:100%;height:auto;border-radius:22px;border:1px solid var(--line);display:block;user-select:none}
+svg text{font-family:'IBM Plex Mono',monospace}
+.pp{stroke:#16304f;stroke-width:9;fill:none;stroke-linecap:round}
+.fw{stroke:var(--aqua);stroke-width:3;fill:none;stroke-dasharray:8 10;opacity:0}
+.fw.on{opacity:1;animation:dash .6s linear infinite} @keyframes dash{to{stroke-dashoffset:-18}}
+.drop{animation:fall .6s linear infinite} @keyframes fall{from{transform:translateY(0);opacity:1}to{transform:translateY(48px);opacity:0}}
+.sb{cursor:pointer} .sb rect{fill:#121a33;stroke:#3a4a78} .sb:hover rect{stroke:var(--aqua)} .sb.on rect{fill:var(--aqua)} .sb.on text{fill:#04120f}
+.blink{animation:bl .7s infinite} @keyframes bl{50%{opacity:.3}}
+.flash{animation:fl .5s} @keyframes fl{50%{filter:drop-shadow(0 0 16px #5ef2d6) brightness(1.5)}}
+.ring{transform-box:fill-box;transform-origin:center;animation:rg 1s ease-out} @keyframes rg{from{transform:scale(.4);opacity:1}to{transform:scale(2.6);opacity:0}}
+#toasts{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);width:min(560px,92vw);z-index:50}
+.toast{padding:.7rem 1rem;border-radius:14px;margin-bottom:.5rem;font-size:.85rem;border:1px solid;animation:sl .3s;backdrop-filter:blur(8px)}
+.toast.warn{background:rgba(70,12,28,.92);border-color:var(--coral)} .toast.info{background:rgba(8,50,46,.92);border-color:var(--aqua)}
+@keyframes sl{from{transform:translateY(-140%);opacity:0}}
+#term{height:11rem;overflow-y:auto;font-size:.66rem;line-height:1.4;background:#05080f;border-radius:12px;padding:.6rem}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
+</style>
+</head>
+<body class="p-3 md:p-5 max-w-[1300px] mx-auto">
+<div id="toasts"></div>
+
+<!-- ============ TOP BAR: brand, live power telemetry, presenter controls ============ -->
+<header class="flex flex-wrap items-center justify-between gap-3 mb-3">
+  <div><h1 class="text-xl md:text-2xl font-bold" style="color:var(--aqua)">Rootline</h1>
+    <p class="lbl">A living digital twin: sun, soil, pipes, radio and cloud in one scene</p></div>
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+    <span>Solar <b id="sV">0</b> V &middot; <b id="sA">0</b> A &middot; <b id="sW" style="color:var(--sun)">0</b> W</span>
+    <span>Battery <b id="batV">76%</b></span><span>Health <b id="health">NOMINAL</b></span>
+    <span>Packets <b id="pkts" style="color:var(--aqua)">0</b></span>
+    <span id="net" style="color:#ffc857">app link: connecting</span>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    <button class="btn" onclick="drought()">Dry out Zone 2</button><button class="btn" onclick="refill()">Refill tank</button>
+    <button class="btn" id="presBtn" onclick="togglePres()">Presentation Mode</button><button class="btn" onclick="resetAll()">Reset</button>
+  </div>
+</header>
+
+<!-- ============ THE LIVING SCENE: field hardware + IoT radio link in one SVG ============ -->
+<svg id="scene" viewBox="0 0 1200 570" aria-label="Interactive farm digital twin">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop id="sk0" offset="0"/><stop id="sk1" offset="1"/></linearGradient></defs>
+  <rect width="1200" height="300" fill="url(#sky)"/>
+  <g id="stars" fill="#fff"></g>
+  <rect y="300" width="1200" height="270" fill="#1a1008"/>
+  <rect y="296" width="1200" height="6" fill="#2d5a27"/>
+
+  <!-- SUN: drag it up and down to change sunlight intensity -->
+  <g id="sunG" data-drag="sun" style="cursor:ns-resize;touch-action:none">
+    <circle id="sunC" cx="1110" cy="40" r="26" fill="#ffc857"/><circle cx="1110" cy="40" r="44" fill="#ffc857" opacity=".15" id="sunH"/>
+    <text id="sunT" x="1110" y="45" text-anchor="middle" font-size="12" fill="#3a2600" font-weight="600">80%</text>
+  </g>
+  <text x="1110" y="250" text-anchor="middle" font-size="10" fill="#fff" opacity=".6">drag the sun</text>
+
+  <!-- CLOUD (MQTT broker) -->
+  <g id="cloud"><path d="M590 90h110a24 24 0 0 0 0-48 34 34 0 0 0-64-8 28 28 0 0 0-46 22 17 17 0 0 0 0 34z" fill="#c9d6ff" opacity=".92"/>
+    <text x="645" y="76" text-anchor="middle" font-size="12" fill="#0b1226" font-weight="600">MQTT cloud</text></g>
+
+  <!-- ESP32 radio mast: ring pulses on every packet -->
+  <g><line x1="290" y1="300" x2="290" y2="170" stroke="#9fb0e0" stroke-width="4"/><rect x="276" y="148" width="28" height="22" rx="4" fill="#142040" stroke="var(--aqua)" stroke-width="2"/>
+    <text x="290" y="140" text-anchor="middle" font-size="11" fill="var(--aqua)">ESP32</text><g id="rings"></g></g>
+  <g id="pk"></g>
+
+  <!-- WATER TANK on stilts -->
+  <g><line x1="55" y1="280" x2="55" y2="300" stroke="#9fb0e0" stroke-width="5"/><line x1="115" y1="280" x2="115" y2="300" stroke="#9fb0e0" stroke-width="5"/>
+    <rect x="40" y="140" width="90" height="140" rx="10" fill="#0a1830" stroke="#9fb0e0" stroke-width="3"/>
+    <rect id="tFill" x="42" y="140" width="86" height="0" fill="#2aa7ff" opacity=".85"/>
+    <text id="tPct" x="85" y="215" text-anchor="middle" font-size="20" font-weight="600" fill="#fff">85%</text><text x="85" y="130" text-anchor="middle" font-size="11" fill="var(--mut)">water tank</text></g>
+
+  <!-- SOLAR PANEL + battery -->
+  <g><line x1="205" y1="300" x2="205" y2="262" stroke="#9fb0e0" stroke-width="4"/>
+    <g transform="rotate(-18 205 250)"><rect x="160" y="236" width="90" height="26" fill="#12306a" stroke="#9fb0e0" stroke-width="2"/><rect id="panelGlow" x="160" y="236" width="90" height="26" fill="#ffc857" opacity=".4"/>
+    <path d="M190 236v26M220 236v26M160 249h90" stroke="#9fb0e0" opacity=".6"/></g>
+    <rect x="186" y="270" width="38" height="22" rx="3" fill="#0a1220" stroke="#9fb0e0"/><rect id="batFill" x="188" y="272" width="30" height="18" fill="#8be36b"/>
+    <text x="205" y="150" text-anchor="middle" font-size="11" fill="var(--mut)">solar + battery</text></g>
+
+  <!-- UNDERGROUND PIPE NETWORK -->
+  <path class="pp" d="M85 280V545H1000"/><path id="fMain" class="fw" d="M85 280V545H850"/>
+  <g id="zones"></g>
+</svg>
+<p class="lbl my-2 text-center">Drag the soil of any zone up or down to change moisture. Below 30% the pump engages, the tank drains and the alert fires.</p>
+
+<!-- ============ CLOUD CONSOLE: the "app" layer, shown as plain panels ============ -->
+<section class="grid gap-3 lg:grid-cols-3">
+  <div class="card">
+    <h2 class="hd text-sm mb-2">Cloud control</h2>
+    <div class="lbl mb-1">Master pump</div>
+    <div class="grid grid-cols-3 gap-2 mb-4" id="master">
+      <button class="btn" data-m="auto" onclick="setMaster('auto')">AUTO</button><button class="btn" data-m="on" onclick="setMaster('on')">FORCE ON</button><button class="btn" data-m="off" onclick="setMaster('off')">FORCE OFF</button></div>
+    <div id="bars" class="space-y-2 text-xs"></div>
+  </div>
+  <div class="card">
+    <h2 class="hd text-sm mb-2">Soil moisture, last 30 s</h2>
+    <svg viewBox="0 0 300 110" class="w-full rounded-xl" style="background:#05080f">
+      <line x1="0" x2="300" y1="77" y2="77" stroke="#ff5d73" stroke-dasharray="4 4" opacity=".7"/><text x="4" y="73" font-size="8" fill="#ff5d73">30% alert line</text>
+      <polyline id="l0" fill="none" stroke="#8be36b" stroke-width="2"/><polyline id="l1" fill="none" stroke="#5ef2d6" stroke-width="2"/><polyline id="l2" fill="none" stroke="#c084fc" stroke-width="2"/></svg>
+    <div class="lbl mt-2"><span style="color:#8be36b">Greenhouses</span> &middot; <span style="color:#5ef2d6">Open Field</span> &middot; <span style="color:#c084fc">Orchard</span></div>
+  </div>
+  <div class="card"><h2 class="hd text-sm mb-2">Gateway log (MQTT)</h2><div id="term"></div></div>
+</section>
+
+<script>
+/* =====================================================================
+   Rootline: state S is the single source of truth. tick() simulates,
+   render() paints the SVG scene and the console. Drag handlers feed S.
+   ===================================================================== */
+const $ = id => document.getElementById(id), NS = 'http://www.w3.org/2000/svg';
+const COL = ['#8be36b', '#5ef2d6', '#c084fc'], NAMES = ['Greenhouses', 'Open Field', 'Orchard'];
+const PX = [330, 560, 790], LOW = 30, STOP = 50, SOIL_TOP = 300, SOIL_H = 220;
+const fresh = () => ({ sun: 80, batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
+  zones: [{m:62,t:29,h:71,bt:29},{m:55,t:26,h:64,bt:26},{m:58,t:24,h:66,bt:24}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false})) });
+let S = fresh(), hist = [[], [], []], pkts = 0, beat = 0, lastSend = [0, 0, 0], demo = null;
+const lerp = (a, b, k) => Math.round(a + (b - a) * k), mix = (c1, c2, k) => '#' + [0, 2, 4].map(i => lerp(parseInt(c1.substr(1 + i, 2), 16), parseInt(c2.substr(1 + i, 2), 16), k).toString(16).padStart(2, '0')).join('');
+
+/* ---------- Build the zone plots (soil, water, plant, riser pipe, sprinkler, HUD, buttons) ---------- */
+$('zones').innerHTML = PX.map((x, i) => `
+ <rect id="soil${i}" data-drag="${i}" x="${x}" y="${SOIL_TOP}" width="190" height="${SOIL_H}" fill="#3a2616" style="cursor:ns-resize;touch-action:none"/>
+ <rect id="wet${i}" x="${x}" width="190" fill="#2aa7ff" opacity=".35" pointer-events="none"/>
+ <path id="crk${i}" d="M${x+20} 305l14 30 -8 25 16 30M${x+150} 305l-10 35 12 28M${x+90} 310l6 40" stroke="#d9b27a" fill="none" opacity="0" pointer-events="none"/>
+ <line id="lvl${i}" x1="${x}" x2="${x+190}" stroke="${COL[i]}" stroke-width="3" pointer-events="none"/>
+ <circle id="grip${i}" cx="${x+95}" r="9" fill="${COL[i]}" pointer-events="none"/>
+ <g transform="translate(${x+125},300)"><g id="pl${i}"><path d="M0 0V-64" stroke="#5aa845" stroke-width="4"/>
+   <ellipse class="lf${i}" cx="-14" cy="-36" rx="14" ry="6" transform="rotate(-25 -14 -36)"/><ellipse class="lf${i}" cx="14" cy="-48" rx="14" ry="6" transform="rotate(25 14 -48)"/><ellipse class="lf${i}" cx="0" cy="-68" rx="8" ry="13"/></g></g>
+ <path class="pp" d="M${x+30} 545V252"/><path id="fz${i}" class="fw" d="M${x+30} 545V252"/>
+ <rect x="${x+23}" y="244" width="14" height="8" rx="2" fill="#9fb0e0"/>
+ <g id="dr${i}" opacity="0">${[0,1,2,3].map(k => `<circle class="drop" cx="${x+22+k*5}" cy="256" r="2.6" fill="#7fd3ff" style="animation-delay:${k*.15}s"/>`).join('')}</g>
+ <circle id="vl${i}" cx="${x+30}" cy="440" r="9" fill="#8be36b" stroke="#04120f" stroke-width="2"/>
+ <text x="${x}" y="128" font-size="12" fill="${COL[i]}" font-weight="600">Zone ${i+1}: ${NAMES[i]}</text>
+ <text id="mv${i}" x="${x}" y="168" font-size="34" font-weight="700" fill="#fff" style="font-family:Unbounded">62%</text>
+ <text id="th${i}" x="${x}" y="190" font-size="12" fill="#cfd8ff">29.0 C &middot; 71% RH</text>
+ <text id="st${i}" x="${x}" y="212" font-size="12" font-weight="600">THRIVING</text>
+ <circle id="led${i}" cx="${x+176}" cy="122" r="7" fill="#8be36b"/>
+ <g class="sb" id="bm${i}" onclick="toggleMode(${i})"><rect x="${x+8}" y="488" width="82" height="24" rx="12"/><text id="tm${i}" x="${x+49}" y="504" text-anchor="middle" font-size="11" fill="#fff">AUTO</text></g>
+ <g class="sb" id="bv${i}" onclick="toggleValve(${i})"><rect x="${x+98}" y="488" width="84" height="24" rx="12"/><text id="tv${i}" x="${x+140}" y="504" text-anchor="middle" font-size="11" fill="#fff">VALVE OFF</text></g>`).join('');
+$('bars').innerHTML = NAMES.map((n, i) => `<div><div class="flex justify-between"><span>Zone ${i+1}</span><b id="cv${i}">0%</b></div><div class="h-2 rounded-full bg-[#05080f] overflow-hidden"><div id="cb${i}" class="h-full" style="transition:.3s"></div></div></div>`).join('')
+  + `<div class="flex justify-between lbl pt-1"><span>Tank <b id="aT">85%</b></span><span>Pump <b id="aP">IDLE</b></span></div>`;
+$('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97) % 1180 + 10}" cy="${(k * 53) % 230 + 8}" r="${k % 3 ? .9 : 1.5}"/>`).join('');
+
+/* ---------- Control logic ---------- */
+const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
+const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : (z.mode === 'auto' ? z.latch : z.on);
+const pumping = z => wants(z) && canRun();
+function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
+function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
+function toggleValve(i) { const z = S.zones[i]; if (z.mode === 'manual') { z.on = !z.on; tick(true); } }
+function setMaster(m) { S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
+function refill() { S.tank = 100; log('SYS', 'tank', 'refill valve open, level 100%', '#8be36b'); tick(true); }
+function togglePres() { document.documentElement.classList.toggle('pres'); $('presBtn').classList.toggle('on'); }
+function drought() { clearInterval(demo); demo = setInterval(() => { const z = S.zones[1]; if (z.m > 18) setMoist(1, z.m - 2); else clearInterval(demo); }, 120); }
+function resetAll() { clearInterval(demo); S = fresh(); hist = [[], [], []]; $('toasts').innerHTML = ''; $('term').innerHTML = ''; log('SYS', 'reset', 'digital twin restored', '#7d8bb3'); tick(true); }
+
+/* ---------- Drag the sun (sunlight) or the soil (moisture) ---------- */
+let drag = null; const scene = $('scene');
+scene.addEventListener('pointerdown', e => { const t = e.target.closest('[data-drag]'); if (t) { drag = t.dataset.drag; move(e); } });
+window.addEventListener('pointermove', e => drag !== null && move(e)); window.addEventListener('pointerup', () => drag = null);
+function move(e) {
+  const r = scene.getBoundingClientRect(), y = (e.clientY - r.top) * 570 / r.height, c = v => Math.max(0, Math.min(100, Math.round(v)));
+  if (drag === 'sun') { S.sun = c((220 - y) / 1.8); tick(true); } else setMoist(+drag, c((SOIL_TOP + SOIL_H - y) / (SOIL_H / 100)));
+}
+
+/* ---------- Telemetry: JSON log + packet flying mast -> cloud ---------- */
+function send(i) {
+  const z = S.zones[i], o = { node:'esp32-01', zone:i+1, moist:+z.m.toFixed(1), temp:+z.t.toFixed(1), hum:Math.round(z.h), valve:z.p?1:0, tank:Math.round(S.tank), batt:Math.round(S.batt) };
+  log('PUB', `farm/zone${i+1}/telemetry`, JSON.stringify(o), COL[i]); fly(COL[i]); $('pkts').textContent = ++pkts;
+}
+function log(d, topic, body, c) {
+  const t = $('term'), e = document.createElement('div');
+  e.innerHTML = `<span style="color:#7d8bb3">${new Date().toTimeString().slice(0, 8)}</span> <b style="color:${c}">${d}</b> ${topic} <span style="color:#a8b6e0">${body}</span>`;
+  t.appendChild(e); while (t.children.length > 60) t.firstChild.remove(); t.scrollTop = t.scrollHeight;
+}
+function fly(c, down) {                                   // glowing packet along a curve (reversed for cloud commands)
+  const e = document.createElementNS(NS, 'circle'); e.setAttribute('r', 5); e.setAttribute('fill', c); e.style.filter = `drop-shadow(0 0 6px ${c})`; $('pk').appendChild(e);
+  const t0 = performance.now(); (function f(t) {
+    let k = Math.min(1, (t - t0) / 1100); if (down) k = 1 - k; const a = 1 - k;
+    e.setAttribute('cx', a * a * 290 + 2 * a * k * 470 + k * k * 640); e.setAttribute('cy', a * a * 150 + 2 * a * k * 10 + k * k * 85);
+    if (t - t0 < 1100) requestAnimationFrame(f); else { e.remove(); const cl = $('cloud'); cl.classList.remove('flash'); cl.getBoundingClientRect(); cl.classList.add('flash'); }
+  })(t0);
+  const r = document.createElementNS(NS, 'circle'); r.setAttribute('cx', 290); r.setAttribute('cy', 159); r.setAttribute('r', 14); r.setAttribute('fill', 'none'); r.setAttribute('stroke', c); r.setAttribute('class', 'ring');
+  $('rings').appendChild(r); setTimeout(() => r.remove(), 1000);
+}
+function notify(msg, type = 'warn') {
+  pubEvent(msg, type);                                    // mirror every alert to the deployed app                      // big push-notification banner
+  const n = document.createElement('div'); n.className = 'toast ' + type; n.textContent = (type === 'warn' ? '\u26A0 ' : '\u2714 ') + msg;
+  $('toasts').prepend(n); while ($('toasts').children.length > 3) $('toasts').lastChild.remove(); setTimeout(() => n.remove(), 7000);
+}
+
+/* ---------- Simulation step (500 ms, plus instantly on every drag) ---------- */
+function tick(instant) {
+  const V = S.sun ? 12.5 + 7 * S.sun / 100 : 0, I = 6 * S.sun / 100, W = V * I; let n = 0;
+  S.zones.forEach((z, i) => {
+    if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
+    const p = pumping(z);
+    if (!instant) {
+      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else z.m = Math.max(0, z.m - .03);
+      z.t = Math.max(z.bt - 3, Math.min(z.bt + 3, z.t + (Math.random() - .5) * .3)); z.h = Math.min(99, 35 + z.m * .45 + (Math.random() - .5) * 2);
+    }
+    if (p) n++;
+    if (z.m < LOW && !z.alerted) { z.alerted = true; notify(`WARNING: Zone ${i+1} Soil Dry - ${p ? 'Automatic Pump Engaged' : 'Pump Unavailable (check power, tank or mode)'}`); }
+    if (z.m >= LOW + 5) z.alerted = false;
+    if (p !== z.p) { z.p = p; send(i); if (!p && z.m >= STOP) notify(`Zone ${i+1} restored to ${Math.round(z.m)}% moisture`, 'info'); }
+    if (!instant) hist[i].push(z.m); if (hist[i].length > 60) hist[i].shift();
+  });
+  if (!instant) S.batt = Math.max(0, Math.min(100, S.batt + W * .0025 - n * .12 - .01));        // solar charge minus pump load
+  if (S.tank < 15 && !S.lowTank) { S.lowTank = true; notify('Tank level critical: refill soon'); } if (S.tank > 25) S.lowTank = false;
+  if (S.batt < 20 && !S.lowBatt) { S.lowBatt = true; notify('Battery low: check sunlight'); } if (S.batt > 30) S.lowBatt = false;
+  if (!instant && ++beat % 6 === 0) S.zones.forEach((z, i) => send(i));                           // 3 s heartbeat
+  render(V, I, W, n); pubState();
+}
+
+/* ---------- Paint the scene and console ---------- */
+function render(V, I, W, n) {
+  const k = S.sun / 100, sy = 220 - S.sun * 1.8;
+  $('sk0').setAttribute('stop-color', mix('#05081a', '#2f7fd0', k)); $('sk1').setAttribute('stop-color', mix('#151a3a', '#f6b26b', k * .9)); $('stars').setAttribute('opacity', Math.max(0, 1 - k * 1.6));
+  $('sunG').setAttribute('transform', `translate(0 ${sy - 40})`); $('sunC').setAttribute('opacity', .35 + .65 * k); $('sunT').textContent = S.sun + '%'; $('panelGlow').setAttribute('opacity', .1 + .7 * k);
+  $('sV').textContent = V.toFixed(1); $('sA').textContent = I.toFixed(2); $('sW').textContent = W.toFixed(0);
+  const b = Math.round(S.batt); $('batV').textContent = b + '%'; $('batFill').setAttribute('width', 30 * b / 100); $('batFill').setAttribute('fill', b < 20 ? '#ff5d73' : b < 40 ? '#ffc857' : '#8be36b');
+  const h = S.batt <= 5 ? ['PUMP LOCKOUT', '#ff5d73'] : S.batt < 20 ? ['CRITICAL', '#ff5d73'] : S.sun < 15 ? ['LOW SUN', '#ffc857'] : ['NOMINAL', '#8be36b'];
+  $('health').textContent = h[0]; $('health').style.color = h[1];
+  const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
+  $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
+  document.querySelectorAll('#master [data-m]').forEach(x => x.classList.toggle('on', x.dataset.m === S.master));
+  S.zones.forEach((z, i) => {
+    const dry = z.m < LOW, bad = dry || z.p, m = Math.round(z.m), y = SOIL_TOP + SOIL_H - z.m * SOIL_H / 100, wilt = Math.max(0, Math.min(1, (STOP - z.m) / STOP));
+    $('wet' + i).setAttribute('y', y); $('wet' + i).setAttribute('height', SOIL_TOP + SOIL_H - y); $('lvl' + i).setAttribute('y1', y); $('lvl' + i).setAttribute('y2', y); $('grip' + i).setAttribute('cy', y);
+    $('soil' + i).setAttribute('fill', mix('#7a5630', '#2a190d', z.m / 100)); $('crk' + i).setAttribute('opacity', dry ? .8 : 0);
+    $('pl' + i).setAttribute('transform', `rotate(${wilt * 38 * (i % 2 ? -1 : 1)}) scale(1 ${.65 + .35 * (1 - wilt)})`);
+    document.querySelectorAll('.lf' + i).forEach(l => l.setAttribute('fill', mix('#8be36b', '#a8743a', wilt)));
+    $('mv' + i).textContent = m + '%'; $('th' + i).textContent = `${z.t.toFixed(1)} C \u00B7 ${Math.round(z.h)}% RH`;
+    $('st' + i).textContent = z.p ? 'WATERING' : dry ? 'DRY' : 'THRIVING'; $('st' + i).setAttribute('fill', bad ? '#ff5d73' : '#8be36b');
+    $('led' + i).setAttribute('fill', bad ? '#ff5d73' : '#8be36b'); $('led' + i).classList.toggle('blink', bad); $('vl' + i).setAttribute('fill', z.p ? '#5ef2d6' : '#ff5d73');
+    $('fz' + i).classList.toggle('on', z.p); $('dr' + i).setAttribute('opacity', z.p ? 1 : 0);
+    $('tm' + i).textContent = z.mode.toUpperCase(); $('bm' + i).classList.toggle('on', z.mode === 'manual');
+    $('tv' + i).textContent = z.p ? 'VALVE OPEN' : 'VALVE OFF'; $('bv' + i).classList.toggle('on', z.p); $('bv' + i).style.opacity = z.mode === 'manual' ? 1 : .4;
+    $('cv' + i).textContent = m + '%'; $('cb' + i).style.width = m + '%'; $('cb' + i).style.background = dry ? '#ff5d73' : m < 45 ? '#ffc857' : COL[i];
+    $('l' + i).setAttribute('points', hist[i].map((v, j) => `${(j * 300 / 59).toFixed(1)},${(110 - v * 1.1).toFixed(1)}`).join(' '));
+  });
+}
+
+/* ---------- Live link to the deployed app: MQTT over WebSocket (public HiveMQ broker) ----------
+   ROOM must match the one in live.js. Keep it long and random: anyone who knows it can read/write. */
+const ROOM = 'gakinya-rl-8h2q9x4m', BROKER = 'wss://broker.hivemq.com:8884/mqtt', T_STATE = `rootline/${ROOM}/state`, T_EVT = `rootline/${ROOM}/events`;
+let net = null, lastPub = 0;
+const setNet = (txt, c) => { $('net').textContent = txt; $('net').style.color = c; };
+try {
+  net = mqtt.connect(BROKER, { clientId: 'twin-' + Math.random().toString(16).slice(2, 8), reconnectPeriod: 2000 });
+  net.on('connect', () => { setNet('app link: LIVE', '#8be36b'); pubState(true); });
+  net.on('reconnect', () => setNet('app link: reconnecting', '#ffc857'));
+  net.on('error', () => setNet('app link: offline (twin still works)', '#ff5d73'));
+} catch (e) { setNet('app link: offline (twin still works)', '#ff5d73'); }
+function pubState(force) {                                // retained, so a phone that opens late gets the latest values
+  const now = performance.now(); if (!net || !net.connected || (!force && now - lastPub < 250)) return; lastPub = now;
+  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master,
+    zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode })) }), { retain: true });
+}
+function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }
+
+/* ---------- Boot ---------- */
+log('SYS', 'esp32-01', 'boot OK, Wi-Fi connected, MQTT session open', '#8be36b');
+tick(true); setInterval(() => tick(false), 500);
+</script>
+</body>
+</html>
