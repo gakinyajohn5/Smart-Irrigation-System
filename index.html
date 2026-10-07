@@ -721,6 +721,7 @@ async function apiFail(res){
   if(/API_KEY is not set/i.test(msg)) return 'Server setup missing: ' + msg.replace(/ in Netlify.*$/i,'') + '. Add it in Netlify > Site settings > Environment variables, then redeploy.';
   if(/API key not valid|API_KEY_INVALID|\b40[13]\b/i.test(msg)) return 'The Gemini API key was rejected. Check that GEMINI_API_KEY is correct.';
   if(/\b429\b|quota/i.test(msg)) return 'AI usage limit reached. Wait a minute and try again.';
+  if(/\b503\b|high demand|overloaded|unavailable/i.test(msg)) return 'The AI is busy right now. Wait a few seconds and try again.';
   return msg ? msg.slice(0,140) : 'Server error (' + res.status + ')';
 }
 
