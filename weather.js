@@ -16,6 +16,20 @@
     var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'decision', irrigate: b.dataset.ans === '1' });
     $('wx-q').textContent = ok ? 'Answer sent.' : 'Not connected to the dashboard. Try again.';
   });
+  var PK = 'rl-pause', until = 0; try { until = +localStorage.getItem(PK) || 0; } catch (e) {} window.__pauseUntil = until;
+  function paused() { return live && tw ? tw.pause > 0 : until > Date.now(); }
+  function left() { return ((live && tw ? tw.pause : (until - Date.now()) / 3600000)).toFixed(1) + ' h'; }
+  function setLocal(ms) { until = ms; window.__pauseUntil = ms; try { localStorage.setItem(PK, ms); } catch (e) {} }
+  function pz() { var p = paused(); $('pz-status').textContent = p ? ' \u23F8 Paused: ' + left() + ' left' : ' Irrigation is not paused'; $('pz-resume').style.display = p ? '' : 'none'; }
+  $('wx-strip').insertAdjacentHTML('afterend', '<div class="gauge" id="pz-card" style="margin-bottom:12px;text-align:left;"><b style="font-size:14px;">Do not irrigate</b><span id="pz-status"></span><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;"><select id="pz-h"><option value="6">6 hours</option><option value="12">12 hours</option><option value="24" selected>1 day</option><option value="48">2 days</option><option value="72">3 days</option><option value="168">1 week</option></select><button class="btn" id="pz-go">Pause irrigation</button><button class="btn ghost" id="pz-resume">Resume</button></div><div id="pz-msg" style="font-size:12px;min-height:14px;margin-top:6px;"></div></div>');
+  $('pz-card').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return; var hrs = +$('pz-h').value, m = $('pz-msg');
+    if (b.id === 'pz-go') { if (window.sendTwinCmd({ type: 'pause', hours: hrs })) m.textContent = 'Irrigation paused for ' + hrs + ' h.'; else { setLocal(Date.now() + hrs * 3600000); m.textContent = 'Paused in the app for ' + hrs + ' h (dashboard not connected).'; } }
+    else { if (!window.sendTwinCmd({ type: 'resume' })) setLocal(0); m.textContent = 'Irrigation resumed.'; }
+    pz();
+  });
+  var _iz = window.irrigateZone;                              // manual "Irrigate 15 s" respects the pause too
+  if (_iz) window.irrigateZone = function (i) { if (paused()) { var m = 'Irrigation is paused (' + left() + ' left). Resume it first.'; pushAlert('warn', '\u23F8', m, 'Do not irrigate'); if ($('dt-msg')) $('dt-msg').textContent = m; return; } _iz(i); };
   function eff() {                                         // real forecast, with today/tomorrow overridden by the twin
     var d = days.map(function (x) { return Object.assign({}, x); });
     if (live && tw && d.length > 1) {
@@ -29,12 +43,13 @@
     var d = eff(), t = d[0]; if (!t) return;
     var rain = t.rain, sun = live && tw ? tw.sun : null;
     $('wx-main').textContent = (t.icon || icon(t.code)) + ' ' + t.hi + '\u00B0C \u00B7 ' + (sun != null ? 'Sun ' + sun + '% \u00B7 ' : '') + 'Rain ' + rain + '%';
-    var msg = live && tw && tw.skip ? 'Rain likely today: irrigation skipped. It rechecks at ' + tw.irrH + ':00 and irrigates if it stays dry.'
+    var msg = paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? 'Rain likely today: irrigation skipped. It rechecks at ' + tw.irrH + ':00 and irrigates if it stays dry.'
       : live && tw && tw.heat ? 'Strong sun: irrigation is held to cooler hours and cycles are shorter.'
       : !live && rain > 75 ? 'Rain likely today: irrigation will be skipped.' : 'Irrigation runs normally. Tap for the week.';
     $('wx-sub').textContent = msg;
     var ask = live && tw && tw.ask; $('wx-ask').style.display = ask ? 'block' : 'none';
     if (ask) { if (!askShown) { askShown = true; $('wx-q').textContent = 'Rain is likely tomorrow (' + tw.rp1 + '%). Irrigate tonight?'; pushAlert('warn', '\uD83C\uDF27', 'Rain likely tomorrow (' + tw.rp1 + '%): irrigate tonight?', 'Answer on the Field screen'); } } else askShown = false;
+    pz();
     $('wk-note').textContent = live ? 'Today and tomorrow follow the digital twin; the rest is the live forecast.' : 'Live forecast for this farm.';
     $('wk-days').innerHTML = d.map(function (x, i) {
       var dt = new Date(x.date + 'T12:00:00'), hot = x.rain > 75;

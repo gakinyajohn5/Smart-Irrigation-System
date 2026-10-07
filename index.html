@@ -625,7 +625,7 @@ function simTick(){
   } else {
     moisture = Math.max(24, Math.min(90, moisture + (Math.random()*6-3.4)));
     battery = Math.max(18, Math.min(96, battery + (Math.random()*3-1.1)));
-    if(moisture < 34 && !rainSoon && Math.random()<0.6){
+    if(moisture < 34 && !rainSoon && !(window.__pauseUntil > Date.now()) && Math.random()<0.6){
       irrigating = true; irrigTicksLeft = 3;
       pushAlert('warn','💧','Moisture low — irrigation started', 'Zone A · auto-triggered by sensor');
     }

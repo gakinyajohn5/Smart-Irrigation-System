@@ -26,7 +26,7 @@
     return {
       ts: num(d.ts, 0, 8.64e15, 0), sun: num(d.sun, 0, 100, 0), tank: num(d.tank, 0, 100, 0), batt: num(d.batt, 0, 100, 0),
       master: ['auto', 'on', 'off'].indexOf(d.master) >= 0 ? d.master : 'auto', rain: !!d.rain, clock: num(d.clock, 0, 24, 0), auto: !!d.auto,
-      solar: num(d.solar, 0, 1000, 0), temp: num(d.temp, -10, 60, 26), rp0: num(d.rp0, 0, 100, 0), rp1: num(d.rp1, 0, 100, 0), skip: !!d.skip, heat: !!d.heat, ask: !!d.ask, faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
+      solar: num(d.solar, 0, 1000, 0), temp: num(d.temp, -10, 60, 26), rp0: num(d.rp0, 0, 100, 0), rp1: num(d.rp1, 0, 100, 0), pause: num(d.pause, 0, 168, 0), skip: !!d.skip, heat: !!d.heat, ask: !!d.ask, faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
       zones: d.zones.slice(0, 3).map(function (z) {
         z = z || {};
         return { m: num(z.m, 0, 100, 0), t: num(z.t, -20, 60, 20), h: Math.round(num(z.h, 0, 100, 0)), p: z.p ? 1 : 0, mode: z.mode === 'manual' ? 'manual' : 'auto', ph: num(z.ph, 3.5, 9, 6.5) };
