@@ -10,7 +10,7 @@
   nav.before(scr);
   var tab = nav.querySelector('[data-s="ledger"]');
   if (tab) tab.insertAdjacentHTML('afterend', '<button data-s="week" onclick="go(\'week\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="3.5"/><path d="M9 2v2M2 9h2M4 4l1.4 1.4M14 4l-1.4 1.4"/><path d="M8 20h9a3.5 3.5 0 000-7 5 5 0 00-9.5-1A4 4 0 008 20z"/></svg>Week</button>');
-  home.insertAdjacentHTML('afterbegin', '<div class="gauge" id="wx-strip" style="margin-bottom:12px;text-align:left;cursor:pointer;" onclick="go(\'week\')"><b id="wx-main" style="font-size:15px;">\u2026</b><span id="wx-sub"></span><div id="wx-ask" style="display:none;margin-top:8px;" onclick="event.stopPropagation()"><div id="wx-q" style="font-weight:600;font-size:13px;margin-bottom:6px;"></div><button class="btn" data-ans="1">\uD83D\uDCA7 Irrigate tonight</button> <button class="btn ghost" data-ans="0">Skip, rain is coming</button></div></div>');
+  home.insertAdjacentHTML('afterbegin', '<div class="gauge" id="wx-strip" style="margin-bottom:12px;text-align:left;cursor:pointer;" onclick="go(\'week\')"><span id="wx-sub"></span><div id="wx-ask" style="display:none;margin-top:8px;" onclick="event.stopPropagation()"><div id="wx-q" style="font-weight:600;font-size:13px;margin-bottom:6px;"></div><button class="btn" data-ans="1">\uD83D\uDCA7 Irrigate tonight</button> <button class="btn ghost" data-ans="0">Skip, rain is coming</button></div></div>');
   $('wx-ask').addEventListener('click', function (e) {
     var b = e.target.closest('[data-ans]'); if (!b) return;
     var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'decision', irrigate: b.dataset.ans === '1' });
@@ -56,7 +56,10 @@
   function paint() {
     ir(); var d = eff(), t = d[0]; if (!t) return;
     var rain = t.rain, sun = live && tw ? tw.sun : null;
-    $('wx-main').textContent = (t.icon || icon(t.code)) + ' ' + t.hi + '\u00B0C \u00B7 ' + (sun != null ? 'Sun ' + sun + '% \u00B7 ' : '') + 'Rain ' + rain + '%';
+    var sw = typeof currentLang !== 'undefined' && currentLang === 'sw';   // header shows the one weather readout
+    $('weather-icon').textContent = t.icon || icon(t.code);
+    $('lbl-temp').textContent = t.hi + '\u00B0';
+    $('lbl-rain').textContent = (sun != null ? (sw ? 'Jua ' : 'Sun ') + sun + '% \u00B7 ' : '') + (sw ? 'Mvua ' : 'Rain ') + rain + '%';
     var msg = paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? (tw.sched === 'evening' ? 'Rain likely today: tonight\'s irrigation waits and runs only if it stays dry.' : 'Rain likely today: this morning\'s irrigation is skipped. It resumes the next morning if no rain comes.')
       : live && tw && tw.heat ? 'Strong sun: irrigation is held to cooler hours and cycles are shorter.'
       : !live && rain > 75 ? 'Rain likely today: irrigation will be skipped.' : 'Irrigation runs normally. Tap for the week.';
@@ -81,6 +84,8 @@
   }
   try { var c = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(c)) days = c; } catch (e) {}
   var _sf = selectFarm; selectFarm = function () { _sf.apply(this, arguments); load(); };
+  var _rw = renderWeather;                                     // keep the header on this data when index.html/farmplus.js repaint it
+  renderWeather = function () { _rw.apply(this, arguments); paint(); };
   window.addEventListener('twin', function (e) { tw = e.detail.d; live = e.detail.live; paint(); });
   if (window.__twinLast) { tw = window.__twinLast; paint(); }
   paint(); load(); setInterval(load, 3600000); setInterval(ir, 1500);
