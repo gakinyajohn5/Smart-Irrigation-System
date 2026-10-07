@@ -30,7 +30,7 @@ async function callGemini(body) {
       continue;
     }
     lastErr = `${model}: ${res.status} ${data?.error?.message || ''}`;
-    if (res.status !== 404) throw new Error(lastErr);
+    if (![404, 429, 503].includes(res.status)) throw new Error(lastErr);
   }
   throw new Error(lastErr);
 }

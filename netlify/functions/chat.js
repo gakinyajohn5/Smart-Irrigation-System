@@ -3,7 +3,9 @@ const { callGemini } = require('./_gemini');
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
   try {
-    const { messages = [], lang, context = {} } = JSON.parse(event.body || '{}');
+    const body = JSON.parse(event.body || '{}');
+    const lang = body.lang, context = body.context || {};
+    const messages = (Array.isArray(body.messages) ? body.messages : []).slice(-10);
     if (!messages.length) return { statusCode: 400, body: JSON.stringify({ error: 'No messages' }) };
 
     const system = `You are a helpful, practical agricultural expert assistant built into a smart irrigation app.
@@ -12,7 +14,7 @@ The user's preferred language is ${lang === 'sw' ? 'Swahili' : 'English'}. Keep 
 
     let contents = messages.map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: String(m.text || '') }],
+      parts: [{ text: String(m.text || '').slice(0, 1000) }],
     }));
     while (contents.length && contents[0].role !== 'user') contents.shift();
 
