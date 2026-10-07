@@ -30,6 +30,20 @@
   });
   var _iz = window.irrigateZone;                              // manual "Irrigate 15 s" respects the pause too
   if (_iz) window.irrigateZone = function (i) { if (paused()) { var m = 'Irrigation is paused (' + left() + ' left). Resume it first.'; pushAlert('warn', '\u23F8', m, 'Do not irrigate'); if ($('dt-msg')) $('dt-msg').textContent = m; return; } _iz(i); };
+  $('wx-strip').insertAdjacentHTML('afterend', '<div class="gauge" id="ir-card" style="display:none;margin-bottom:12px;text-align:left;"><b id="ir-t"></b><div id="ir-b" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div><div id="ir-m" style="font-size:12px;min-height:14px;margin-top:4px;"></div></div>');
+  function ir() {                                            // "Irrigating now" card with a Stop button per running zone
+    var run = [], f = farms[curFarm] || { jars: [] };
+    if (live && tw) tw.zones.forEach(function (z, i) { if (z.p) run.push(i); }); else if (typeof irrigating !== 'undefined' && irrigating) run.push(-1);
+    $('ir-card').style.display = run.length ? 'block' : 'none'; if (!run.length) { $('ir-m').textContent = ''; return; }
+    var nm = function (i) { var j = f.jars[i === -1 ? 0 : i]; return j ? j.name : 'Zone ' + (i + 1); };
+    $('ir-t').textContent = '\uD83D\uDCA7 Irrigating now: ' + run.map(nm).join(', ');
+    $('ir-b').innerHTML = run.map(function (i) { return '<button class="btn" data-stop="' + i + '">\u25A0 Stop ' + nm(i) + '</button>'; }).join('');
+  }
+  $('ir-card').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-stop]'); if (!b) return; var i = +b.dataset.stop;
+    if (i === -1) { irrigating = false; irrigTicksLeft = 0; $('ir-m').textContent = 'Irrigation stopped.'; ir(); return; }
+    $('ir-m').textContent = window.sendTwinCmd({ type: 'stop', zone: i }) ? 'Stop sent. This zone stays off for 3 h unless you irrigate it.' : 'Not connected to the dashboard.';
+  });
   function eff() {                                         // real forecast, with today/tomorrow overridden by the twin
     var d = days.map(function (x) { return Object.assign({}, x); });
     if (live && tw && d.length > 1) {
@@ -40,7 +54,7 @@
   }
   function plan(x) { return x.rain > 75 ? 'Skip: rain' : x.hi >= 30 ? 'Short, cool hours' : 'Normal'; }
   function paint() {
-    var d = eff(), t = d[0]; if (!t) return;
+    ir(); var d = eff(), t = d[0]; if (!t) return;
     var rain = t.rain, sun = live && tw ? tw.sun : null;
     $('wx-main').textContent = (t.icon || icon(t.code)) + ' ' + t.hi + '\u00B0C \u00B7 ' + (sun != null ? 'Sun ' + sun + '% \u00B7 ' : '') + 'Rain ' + rain + '%';
     var msg = paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? 'Rain likely today: irrigation skipped. It rechecks at ' + tw.irrH + ':00 and irrigates if it stays dry.'
@@ -68,5 +82,5 @@
   var _sf = selectFarm; selectFarm = function () { _sf.apply(this, arguments); load(); };
   window.addEventListener('twin', function (e) { tw = e.detail.d; live = e.detail.live; paint(); });
   if (window.__twinLast) { tw = window.__twinLast; paint(); }
-  paint(); load(); setInterval(load, 3600000);
+  paint(); load(); setInterval(load, 3600000); setInterval(ir, 1500);
 })();
