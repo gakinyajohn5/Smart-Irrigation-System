@@ -222,7 +222,7 @@ function advise() {
   const a = S._adv = S._adv || {};
   if (S.skip !== a.skip) { if (S.skip) notify(`Rain chance today ${S.rp0}%: irrigation skipped for the day, rechecked at ${IRR_H}:00`, 'info'); else if (a.skip && S.rp0 > 75 && !S.rained) notify(`It did not rain: irrigating now (${IRR_H}:00 round)`, 'info'); a.skip = S.skip; }
   if (S.heat !== a.heat) { if (S.heat) notify(`Strong sun: irrigation held to cooler hours (soil under ${CRIT}% overrides)`, 'info'); a.heat = S.heat; }
-  if (S.ask && !a.ask) notify(`Rain likely tomorrow (${S.rp1}%): asking the farmer whether to irrigate tonight`, 'info'); a.ask = S.ask;
+  if (S.ask && !a.ask) notify(`Rain likely tomorrow (${S.rp1}%): do you want to irrigate tonight?`, 'warn', { ask: 1 }); a.ask = S.ask;
 }
 function setTemp(d) { S.temp = Math.max(15, Math.min(42, S.temp + d)); S.zones.forEach((z, i) => z.bt = S.temp + [3, 0, -2][i]); log('SYS', 'weather', 'ambient ' + S.temp + ' C', '#ffc857'); tick(true); }
 function bumpRain(k) { S['rp' + k] = (S['rp' + k] + 10) % 110; tick(true); }
@@ -260,8 +260,8 @@ function fly(c, down) {                                   // glowing packet alon
   const r = document.createElementNS(NS, 'circle'); r.setAttribute('cx', 290); r.setAttribute('cy', 159); r.setAttribute('r', 14); r.setAttribute('fill', 'none'); r.setAttribute('stroke', c); r.setAttribute('class', 'ring');
   $('rings').appendChild(r); setTimeout(() => r.remove(), 1000);
 }
-function notify(msg, type = 'warn') {                      // user alerts live in the app: send them there, only log here
-  pubEvent(msg, type); log('EVT', 'app/notify', msg, type === 'warn' ? '#ff5d73' : '#8be36b');
+function notify(msg, type = 'warn', x) {                      // user alerts live in the app: send them there, only log here
+  pubEvent(msg, type, x); log('EVT', 'app/notify', msg, type === 'warn' ? '#ff5d73' : '#8be36b');
 }
 function tell(msg) { log('SYS', 'console', msg, '#ffc857'); }   // operator-only feedback, not sent to the app
 
@@ -288,7 +288,7 @@ function tick(instant) {
     if (z.m < LOW && !z.alerted) { z.alerted = true; notify(`WARNING: Zone ${i+1} Soil Dry - ${p ? 'Automatic Pump Engaged' : S.pause > 0 ? 'Irrigation paused by you' : 'Pump Unavailable (check power, tank or mode)'}`); }
     if (z.m >= LOW + 5) z.alerted = false;
     if (p !== z.p) { z.p = p; send(i);
-      if (p) notify(`Irrigation started in Zone ${i+1}: ${z.force > Date.now() ? 'requested from the app' + (S.heat ? ' (shortened: strong sun)' : '') : z.mode === 'manual' ? 'manual valve' : S.master === 'on' ? 'pump forced on' : 'soil is dry'}. You can stop it from the app.`, 'info');
+      if (p) notify(`Irrigation started in Zone ${i+1}: ${z.force > Date.now() ? 'requested from the app' + (S.heat ? ' (shortened: strong sun)' : '') : z.mode === 'manual' ? 'manual valve' : S.master === 'on' ? 'pump forced on' : 'soil is dry'}. You can stop it from the app.`, 'info', { stop: i });
       else if (z.stop > 0) notify(`Irrigation in Zone ${i+1} stopped by you; it stays off for ${z.stop} h`, 'info');
       else if (z.m >= STOP) notify(`Zone ${i+1} restored to ${Math.round(z.m)}% moisture`, 'info');
       else notify(`Irrigation stopped in Zone ${i+1} (${Math.round(z.m)}% moisture)`, 'info'); }
@@ -355,7 +355,7 @@ function pubState(force) {                                // retained, so a phon
   net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain, clock: +S.clock.toFixed(2), auto: !!S.auto, solar: S.solarW || 0, faults: S.faults || [], temp: S.temp, rp0: S.rp0, rp1: S.rp1, skip: !!S.skip, heat: !!S.heat, ask: !!S.ask, irrH: IRR_H, pause: +(S.pause || 0).toFixed(2),
     zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode, ph: +z.ph.toFixed(1) })) }), { retain: true });
 }
-function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }
+function pubEvent(msg, level, x) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ ...(x || {}), level, msg })); }
 
 /* ---------- Remember the dashboard between visits ---------- */
 try { const sv = JSON.parse(localStorage.getItem(KEY)); if (sv && sv.zones && sv.zones.length === 3) { S = Object.assign(fresh(), sv); S.zones = S.zones.map(z => Object.assign({ mode:'auto', on:false, latch:false, alerted:false, p:false, force:0, ph:6.5 }, z)); } } catch (e) {}

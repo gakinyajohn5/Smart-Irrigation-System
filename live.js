@@ -13,10 +13,26 @@
   function badge() { if (btn) btn.innerHTML = '<span class="dot"></span>' + (linked ? 'LIVE \u00B7 TWIN' : 'LIVE'); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function $(id) { return document.getElementById(id); }
-  function banner(warn, msg) {                                   // pop-up at the top of the app for 6 s
-    var b = document.createElement('div');
-    b.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;max-width:90%;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);color:#fff;background:' + (warn ? '#b4531a' : '#2F5A3E');
-    b.textContent = (warn ? '\u26A0 ' : '\u2713 ') + msg; document.body.appendChild(b); setTimeout(function () { b.remove(); }, 6000);
+  function beep() { try { var A = window.AudioContext || window.webkitAudioContext, a = new A(), o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = .08; o.start(); setTimeout(function () { o.stop(); a.close(); }, 220); } catch (e) {} }
+  function sysNote(msg) { try { if (window.Notification && Notification.permission === 'granted') { if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(function (r) { r.showNotification('Smart Irrigation', { body: msg, icon: 'icon-192.png' }); }); else new Notification('Smart Irrigation', { body: msg }); } } catch (e) {} }
+  document.addEventListener('click', function once() { document.removeEventListener('click', once); try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {} });
+  function popup(warn, msg, x) {                                 // alert card that pops out; warnings stay until dismissed
+    if (!$('rl-pops')) {
+      var st = document.createElement('style');
+      st.textContent = '@keyframes rlpop{0%{transform:translateY(-30px) scale(.9);opacity:0}60%{transform:translateY(4px) scale(1.02);opacity:1}100%{transform:none}}#rl-pops{position:fixed;top:10px;left:0;right:0;z-index:99999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}.rl-pop{pointer-events:auto;width:min(92%,380px);background:#fff;color:#1b2b21;border-radius:16px;border-left:6px solid #2F5A3E;box-shadow:0 12px 34px rgba(0,0,0,.35);padding:12px 14px;animation:rlpop .35s ease-out}.rl-pop.warn{border-left-color:#d9541a}.rl-pop b{font-size:14px;display:block;margin-bottom:2px}.rl-pop p{margin:0;font-size:13px;line-height:1.35}.rl-b{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.rl-pop button{border:0;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;background:#2F5A3E;color:#fff;cursor:pointer}.rl-pop button.g{background:#e6ece8;color:#1b2b21}';
+      document.head.appendChild(st); var w0 = document.createElement('div'); w0.id = 'rl-pops'; document.body.appendChild(w0);
+    }
+    var w = $('rl-pops'), c = document.createElement('div'), h = document.createElement('b'), p = document.createElement('p'), bs = document.createElement('div');
+    c.className = 'rl-pop' + (warn ? ' warn' : ''); bs.className = 'rl-b';
+    h.textContent = warn ? '\u26A0 Farm alert' : '\uD83D\uDCA7 Farm update'; p.textContent = msg; c.appendChild(h); c.appendChild(p); c.appendChild(bs);
+    function btn(t, cls, fn) { var b = document.createElement('button'); b.textContent = t; if (cls) b.className = cls; b.onclick = function () { if (fn) fn(); c.remove(); }; bs.appendChild(b); }
+    if (x && Number.isInteger(x.stop) && x.stop >= 0 && x.stop < 3) { var jn; try { jn = farms[FARM].jars[x.stop].name; } catch (e) {} btn('\u25A0 Stop ' + (jn || 'Zone ' + (x.stop + 1)), '', function () { window.sendTwinCmd({ type: 'stop', zone: x.stop }); }); }
+    if (x && x.ask) { btn('\uD83D\uDCA7 Irrigate tonight', '', function () { window.sendTwinCmd({ type: 'decision', irrigate: true }); }); btn('Skip: rain is coming', 'g', function () { window.sendTwinCmd({ type: 'decision', irrigate: false }); }); }
+    btn('OK', 'g');
+    w.prepend(c); while (w.children.length > 3) w.lastChild.remove();
+    if (!warn) setTimeout(function () { c.remove(); }, 10000);
+    if (warn) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} beep(); }
+    if (document.hidden) sysNote(msg);
   }
 
   // MQTT data is untrusted (public broker): coerce every field to a safe type and range before use
@@ -77,7 +93,7 @@
   c.on('connect', function () { c.subscribe([S, E]); });
   c.on('message', function (topic, buf) {
     var d; try { d = JSON.parse(buf.toString()); } catch (e) { return; }
-    if (topic === E) { if (!d || typeof d !== 'object') return; banner(d.level === 'warn', String(d.msg).slice(0, 200)); pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
+    if (topic === E) { if (!d || typeof d !== 'object') return; popup(d.level === 'warn', String(d.msg).slice(0, 200), d); pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
     d = clean(d); if (!d) return;
     if (!d.ts || Math.abs(Date.now() - d.ts) > 30000) { apply(d, false); return; }   // old retained message: show it as "last known", not live
     lastMsg = Date.now(); if (!linked) { linked = true; badge(); }
