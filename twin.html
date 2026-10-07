@@ -299,7 +299,8 @@ function fly(c, down) {                                   // glowing packet alon
   $('rings').appendChild(r); setTimeout(() => r.remove(), 1000);
 }
 function notify(msg, type = 'warn', x) {                      // user alerts live in the app: send them there, only log here
-  pubEvent(msg, type, x); log('EVT', 'app/notify', msg, type === 'warn' ? '#ff5d73' : '#8be36b');
+  if (type === 'warn' || x) pubEvent(msg, type, x);              // routine info stays in the dashboard log only
+  log('EVT', 'app/notify', msg, type === 'warn' ? '#ff5d73' : '#8be36b');
 }
 function tell(msg) { log('SYS', 'console', msg, '#ffc857'); }   // operator-only feedback, not sent to the app
 

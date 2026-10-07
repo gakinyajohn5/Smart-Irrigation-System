@@ -35,15 +35,27 @@
     '<button class="btn ghost" data-sched="evening" style="flex:1">\uD83C\uDF07 Evening<br><small>17:00-19:00</small></button></div>' +
     '<div id="care-win" style="font-size:12px;font-weight:600;margin-bottom:4px;"></div><div id="care-why" style="font-size:12px;line-height:1.4;"></div></div>' +
     '<div id="care-msg" style="font-size:12px;color:var(--leaf-dk);min-height:16px;margin:4px 0 8px;"></div>' +
-    '<h2 class="section">Zones, crops and soil pH</h2><div id="care-zones"></div>';
+    '<h2 class="section">Zones and soil pH</h2><div id="care-zones"></div>';
   nav.before(scr);
-  var jl = $('jars-list'); if (jl) jl.insertAdjacentHTML('afterend', '<button class="btn block" style="margin:0 0 14px;" onclick="go(\'care\')">\uD83C\uDF31 Smart care: crops, irrigation time &amp; soil pH</button>');
+
+  /* ---- Crops screen: opened from the hamburger menu (menu.js), not from Smart care ---- */
+  var cscr = document.createElement('div'); cscr.className = 'screen'; cscr.id = 'screen-crops';
+  cscr.innerHTML = '<button class="back" onclick="go(\'home\')">\u2190 Field</button>' +
+    '<h1 class="serif" style="margin:0 0 4px;font-size:20px;">Crops</h1>' +
+    '<div style="font-size:11px;color:var(--line);margin-bottom:14px;">Choose what is planted in each zone. Watering levels and the soil pH range follow the crop.</div>' +
+    '<div id="crop-zones"></div><div id="crop-msg" style="font-size:12px;color:var(--leaf-dk);min-height:16px;margin:4px 0 8px;"></div>';
+  nav.before(cscr);
+  var jl = $('jars-list'); if (jl) jl.insertAdjacentHTML('afterend', '<button class="btn block" style="margin:0 0 14px;" onclick="go(\'care\')">\uD83C\uDF31 Smart care: irrigation time &amp; soil pH</button>');
 
   function build() {                                     // one card per zone of the current farm (built once; paint() only updates text)
     var opts = Object.keys(CROPS).map(function (k) { return '<option value="' + k + '">' + esc(CROPS[k].name) + '</option>'; }).join('') + '<option value="__other">Other crop\u2026</option>';
+    $('crop-zones').innerHTML = jars().map(function (j, i) {
+      return '<div class="gauge" style="text-align:left;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><b>' + esc(j.name) + '</b><div id="k' + i + '-info" style="font-size:11px;opacity:.75;margin-top:2px;"></div></div>' +
+        '<select data-crop="' + i + '" style="font-size:13px;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--paper);">' + opts + '</select></div>';
+    }).join('');
     $('care-zones').innerHTML = jars().map(function (j, i) {
       return '<div class="gauge" style="text-align:left;margin-bottom:10px;" data-z="' + i + '">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b>' + esc(j.name) + '</b><select data-crop="' + i + '" style="font-size:13px;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--paper);">' + opts + '</select></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b>' + esc(j.name) + '</b><span id="c' + i + '-crop" style="font-size:13px;font-weight:600;opacity:.85;"></span></div>' +
         '<div style="margin-top:8px;font-size:12px;" id="c' + i + '-mv"></div>' +
         '<div style="position:relative;height:10px;background:#e3e9dc;border-radius:6px;margin:4px 0 2px;overflow:hidden;"><div id="c' + i + '-bar" style="height:100%;width:0;border-radius:6px;transition:width .3s;"></div><div id="c' + i + '-lo" style="position:absolute;top:0;bottom:0;width:2px;background:#241A10;opacity:.55;"></div><div id="c' + i + '-hi" style="position:absolute;top:0;bottom:0;width:2px;background:#241A10;opacity:.55;"></div></div>' +
         '<div style="font-size:11px;opacity:.75;" id="c' + i + '-rule"></div>' +
@@ -67,8 +79,9 @@
       ? 'Water goes in cooler air with less loss, but leaves can stay wet overnight.' + (blight.length ? ' <b>Take care with ' + esc(blight.join(', ')) + ':</b> they get blight and mildew from wet leaves, so water at the base only.' : '') + ' Dry zones wait for this window; very dry soil is watered at any time.'
       : 'Cool air and calm wind mean little is lost to evaporation, leaves dry in the sun, and the crop has water before the heat. Dry zones wait for this window; very dry soil is watered at any time.';
     jars().forEach(function (j, i) {
-      var z = zdata(i), c = cropOf(z.crop), pa = phAdvice(z.crop, z.ph), m = Math.round(z.m), sel = scr.querySelector('[data-crop="' + i + '"]');
+      var z = zdata(i), c = cropOf(z.crop), pa = phAdvice(z.crop, z.ph), m = Math.round(z.m), sel = cscr.querySelector('[data-crop="' + i + '"]');
       if (sel && document.activeElement !== sel) { var k = c.key || '__custom'; if (!c.key && ![].some.call(sel.options, function (o) { return o.value === '__custom'; })) sel.add(new Option(c.name, '__custom')); sel.value = k; }
+      $('c' + i + '-crop').textContent = '\uD83C\uDF31 ' + c.name; $('k' + i + '-info').textContent = 'Waters below ' + c.low + '%, stops at ' + c.stop + '% \u00B7 pH ' + c.phText;
       var st = m >= c.max ? 'too wet' : m >= c.stop ? 'wet enough, do not irrigate' : m < c.low ? 'dry, needs water' : 'comfortable';
       $('c' + i + '-mv').innerHTML = 'Soil moisture <b>' + m + '%</b> \u00B7 ' + st + (z.twin && tw.zones[i].wait && wired() ? ' \u00B7 <i>waiting for the ' + (tw.sched || 'morning') + ' window</i>' : '');
       $('c' + i + '-bar').style.width = m + '%'; $('c' + i + '-bar').style.background = m >= c.max || m < c.low ? 'var(--rust)' : m >= c.stop ? 'var(--marigold)' : 'var(--leaf)';
@@ -100,13 +113,14 @@
     else if (b.dataset.amend != null) amend(+b.dataset.amend, b.dataset.kind, +b.dataset.delta);
     else if (b.dataset.ai != null) askZone(+b.dataset.ai, b);
   });
-  scr.addEventListener('change', function (e) {
+  function sayCrop(t) { $('crop-msg').textContent = t; }
+  cscr.addEventListener('change', function (e) {
     var sel = e.target.closest('[data-crop]'); if (!sel) return; var i = +sel.dataset.crop, v = sel.value, send = v;
     if (v === '__custom') return;
     if (v === '__other') { send = (prompt('Which crop is planted in this zone?') || '').replace(/[^A-Za-z0-9 \-]/g, '').trim().slice(0, 24); if (!send) { paint(); return; } }
     jars()[i].sub = cropOf(send).name; persist();
-    if (wired()) { var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'crop', zone: i, crop: send }); if (!ok) pending[i] = send; say(ok ? jars()[i].name + ' now grows ' + cropOf(send).name + '. Watering levels and the pH range changed to match.' : 'Saved here. It will be sent when the controller is connected.'); }
-    else say(jars()[i].name + ' now grows ' + cropOf(send).name + '.');
+    if (wired()) { var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'crop', zone: i, crop: send }); if (!ok) pending[i] = send; sayCrop(ok ? jars()[i].name + ' now grows ' + cropOf(send).name + '. Watering levels and the pH range changed to match.' : 'Saved here. It will be sent when the controller is connected.'); }
+    else sayCrop(jars()[i].name + ' now grows ' + cropOf(send).name + '.');
     var cards = document.querySelectorAll('#jars-list .jar-sub'); if (cards[i]) cards[i].textContent = cropOf(send).name;
     paint();
   });

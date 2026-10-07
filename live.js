@@ -16,6 +16,14 @@
   function beep() { try { var A = window.AudioContext || window.webkitAudioContext, a = new A(), o = a.createOscillator(), g = a.createGain(); o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = .08; o.start(); setTimeout(function () { o.stop(); a.close(); }, 220); } catch (e) {} }
   function sysNote(msg) { try { if (window.Notification && Notification.permission === 'granted') { if (navigator.serviceWorker && navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(function (r) { r.showNotification('Smart Irrigation', { body: msg, icon: 'icon-192.png' }); }); else new Notification('Smart Irrigation', { body: msg }); } } catch (e) {} }
   document.addEventListener('click', function once() { document.removeEventListener('click', once); try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {} });
+  var seen = {}, lastPop = 0;                                    // fewer notifications: warnings only, no repeats, no bursts
+  function shouldNotify(d) {
+    var warn = d.level === 'warn', act = Number.isInteger(d.stop) || !!d.ask, now = Date.now(), k = String(d.msg).slice(0, 80);
+    if (!warn && !act) return false;                             // routine info stays out of the farmer's way
+    if (seen[k] && now - seen[k] < 120000) return false;         // same message within 2 min
+    if (!warn && !d.ask && now - lastPop < 30000) return false;  // quiet period after any popup
+    seen[k] = now; lastPop = now; return true;
+  }
   function popup(warn, msg, x) {                                 // alert card that pops out; warnings stay until dismissed
     if (!$('rl-pops')) {
       var st = document.createElement('style');
@@ -29,7 +37,7 @@
     if (x && Number.isInteger(x.stop) && x.stop >= 0 && x.stop < 3) { var jn; try { jn = farms[FARM].jars[x.stop].name; } catch (e) {} btn('\u25A0 Stop ' + (jn || 'Zone ' + (x.stop + 1)), '', function () { window.sendTwinCmd({ type: 'stop', zone: x.stop }); }); }
     if (x && x.ask) { var mo = x.sched !== 'evening'; btn(mo ? '\uD83D\uDCA7 Irrigate anyway' : '\uD83D\uDCA7 Irrigate tonight', '', function () { window.sendTwinCmd({ type: 'decision', irrigate: true }); }); btn(mo ? 'Skip tomorrow: rain is coming' : 'Skip: rain is coming', 'g', function () { window.sendTwinCmd({ type: 'decision', irrigate: false }); }); }
     btn('OK', 'g');
-    w.prepend(c); while (w.children.length > 3) w.lastChild.remove();
+    w.prepend(c); while (w.children.length > 1) w.lastChild.remove();
     if (!warn) setTimeout(function () { c.remove(); }, 10000);
     if (warn) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} beep(); }
     if (document.hidden) sysNote(msg);
@@ -94,7 +102,7 @@
   c.on('connect', function () { c.subscribe([S, E]); });
   c.on('message', function (topic, buf) {
     var d; try { d = JSON.parse(buf.toString()); } catch (e) { return; }
-    if (topic === E) { if (!d || typeof d !== 'object') return; popup(d.level === 'warn', String(d.msg).slice(0, 200), d); pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
+    if (topic === E) { if (!d || typeof d !== 'object') return; if (!shouldNotify(d)) return; popup(d.level === 'warn', String(d.msg).slice(0, 200), d); pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
     d = clean(d); if (!d) return;
     if (!d.ts || Math.abs(Date.now() - d.ts) > 30000) { apply(d, false); return; }   // old retained message: show it as "last known", not live
     lastMsg = Date.now(); if (!linked) { linked = true; badge(); }

@@ -44,7 +44,7 @@
   window.setSimRain = function (on) {
     on = !!on; if (on === simRain) return; simRain = on;
     rainSoon = on || realRain(); renderWeather(); forecast();
-    pushAlert(on ? 'info' : 'warn', on ? '\uD83C\uDF27' : '\u2600', on ? 'Irrigation skipped \u2014 rain at the farm' : 'Rain stopped', 'Live from digital twin');
+    if (on) pushAlert('info', '\uD83C\uDF27', 'Irrigation skipped \u2014 rain at the farm', 'Live from digital twin');
   };
   setInterval(function () {                                  // soil absorbs rain in the app's own simulation
     if (simRain && typeof simOn !== 'undefined' && simOn && !irrigating) { moisture = Math.min(95, moisture + 1.5); paintRing(); }
@@ -106,7 +106,6 @@
     var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'irrigate', zone: i, seconds: 15, confirm: !!(opt && opt.confirmed) }), msg;
     if (ok) msg = 'Irrigation command sent to ' + zn(i) + ' (15 s). The dashboard may refuse it if the tank is empty or power is out.';
     else { msg = 'Dashboard not connected: irrigating in the app simulation.'; if (typeof simOn !== 'undefined' && simOn && !irrigating) { irrigating = true; irrigTicksLeft = 4; } }
-    pushAlert('info', '\uD83D\uDCA7', 'Irrigation requested: ' + zn(i), ok ? 'Sent to the dashboard' : 'App simulation');
     if ($('dt-msg')) $('dt-msg').textContent = msg;
   };
 })();

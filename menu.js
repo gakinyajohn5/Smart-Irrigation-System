@@ -28,6 +28,7 @@
     ['profile', 'Profile', ic('<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.6-3.6 3.6-5.6 7-5.6s6.4 2 7 5.6"/>')],
     ['note', "Today's note", ic('<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h5"/>')],
     ['calendar', 'Crop calendar', ic('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>')],
+    ['crops', 'Crops', ic('<path d="M12 21v-9"/><path d="M12 12c0-4 3-6 7-6 0 4-3 6-7 6z"/><path d="M12 15c0-3-2-5-6-5 0 3 2 5 6 5z"/>')],
     ['pause', 'Do not irrigate', ic('<path d="M12 3c3 4 6 7 6 11a6 6 0 01-12 0c0-4 3-7 6-11z"/><path d="M5 5l14 14"/>')],
     ['reports', 'Reports', ic('<path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h6M9 17h6"/>')]
   ];
@@ -85,6 +86,6 @@
 
   /* Swahili labels for the new menu */
   if (typeof SW !== 'undefined') {
-    SW['Profile'] = 'Wasifu'; SW["Today's note"] = 'Dokezo la leo'; SW['Do not irrigate'] = 'Usinyunyize'; SW['Menu'] = 'Menyu'; SW['Zones'] = 'Maeneo';
+    SW['Profile'] = 'Wasifu'; SW["Today's note"] = 'Dokezo la leo'; SW['Do not irrigate'] = 'Usinyunyize'; SW['Menu'] = 'Menyu'; SW['Crops'] = 'Mazao'; SW['Zones'] = 'Maeneo';
   }
 })();

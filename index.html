@@ -631,7 +631,13 @@ function paintRing(){
   document.getElementById('battery-fill').style.width = battery+'%';
   document.getElementById('battery-val').textContent = Math.round(battery)+'%';
 }
+const _alertSeen = {};
 function pushAlert(iconClass, icon, title, sub){
+  const now = Date.now(), k = String(title);
+  if(_alertSeen[k] && now - _alertSeen[k] < 120000) return;      // same alert again within 2 min: skip it
+  _alertSeen[k] = now;
+  const list = document.getElementById('alerts-list');
+  while(list.children.length >= 12) list.lastElementChild.remove(); // keep the Alerts screen short
   const wrap = document.createElement('div');
   wrap.className='alert new-alert';
   wrap.innerHTML = `<div class="a-icon ${iconClass}">${icon}</div><div><b>${title}</b><span>${sub}</span></div>`;
@@ -653,7 +659,6 @@ function simTick(){
       tank = Math.max(4, tank - 6);
       checkTank();
       document.getElementById('irrigation-status').textContent = 'Just now · 12min cycle';
-      pushAlert('info','✓','Irrigation complete — Zone A', 'Moisture now '+Math.round(moisture)+'%');
       recordSkip();
     }
   } else {
@@ -665,7 +670,6 @@ function simTick(){
     }
   }
   paintRing();
-  if(tick===5) pushAlert('warn','⚡','Solar charging slowed', 'Cloud cover detected over plot');
 }
 let simInterval = setInterval(simTick, 3000);
 function toggleSim(){
