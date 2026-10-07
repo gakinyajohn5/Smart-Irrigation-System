@@ -25,11 +25,11 @@
   body{
     margin:0; font-family:'Work Sans',sans-serif; color:var(--ink);
     background:repeating-linear-gradient(115deg, #0F2418 0px, #0F2418 2px, #14301F 2px, #14301F 46px);
-    display:flex; align-items:flex-start; justify-content:center;
-    min-height:100vh; padding:28px 12px;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; min-height:100dvh; padding:16px 12px;
   }
   h1,h2,h3,.serif{font-family:'Fraunces',serif;}
-  .phone{width:100%; max-width:400px; background:var(--paper); border-radius:28px; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,.45); border:1px solid #000; position:relative;}
+  .phone{display:flex; flex-direction:column; height:min(860px, calc(100vh - 32px)); height:min(860px, calc(100dvh - 32px)); width:100%; max-width:400px; background:var(--paper); border-radius:28px; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,.45); border:1px solid #000; position:relative;}
   .almanac{background:var(--soil); color:var(--parchment); padding:18px 20px 16px; display:flex; justify-content:space-between; align-items:flex-start;}
   .almanac .date{font-size:12px; letter-spacing:.03em; color:var(--muted); margin-bottom:2px;}
   .almanac .place{font-family:'Fraunces',serif; font-size:22px; font-weight:600; background:none; border:none; color:var(--parchment); padding:0; cursor:pointer; display:inline-flex; align-items:center; gap:4px;}
@@ -54,7 +54,9 @@
   .langtoggle button{background:none; border:none; color:var(--muted); font-size:11px; padding:4px 10px; cursor:pointer; font-family:'Work Sans';}
   .langtoggle button.active{background:var(--leaf); color:var(--soil); font-weight:600;}
 
-  .screen{display:none; padding:18px 20px 10px;}
+  .screen{display:none; padding:18px 20px 10px; flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none;}
+  .screen::-webkit-scrollbar{display:none;}
+  .almanac{flex:none;}
   .screen.active{display:block;}
 
   /* ---- Home ---- */
@@ -144,7 +146,7 @@
   .pl-card .total{display:flex; justify-content:space-between; font-family:'Fraunces',serif; font-size:20px; border-top:1px dashed var(--line); margin-top:6px; padding-top:10px; color:var(--leaf);}
 
   /* ---- Nav ---- */
-  nav{display:flex; align-items:center; justify-content:space-around; background:var(--soil); padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px));}
+  nav{flex:none; display:grid; grid-template-columns:repeat(5,1fr); align-items:center; justify-items:center; background:var(--soil); padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px));}
   nav button{background:none; border:none; color:var(--muted); font-size:9.5px; font-family:'Work Sans'; font-weight:600; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;}
   nav button.active{color:var(--leaf);}
   nav svg{width:19px; height:19px;}
@@ -160,7 +162,40 @@
   .new-alert{animation:slidein .4s ease;}
   .nav-badge{position:absolute; top:-2px; right:6px; width:8px; height:8px; border-radius:50%; background:var(--rust); display:none;}
   nav button{position:relative;}
+  @media (max-width:440px){
+    body{padding:0; align-items:stretch;}
+    .phone{height:100vh; height:100dvh; max-width:none; border-radius:0; border:none; box-shadow:none;}
+  }
+
+  /* ---- Menu (hamburger) ---- */
+  .menu-row{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+  .menu-row .avatar{margin-bottom:0;}
+  .burger{width:28px; height:28px; border-radius:8px; background:none; border:1px solid var(--line); color:var(--parchment); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;}
+  .burger svg{width:16px; height:16px;}
+  #drawer{position:absolute; inset:0; z-index:60; visibility:hidden; transition:visibility 0s .25s;}
+  #drawer.open{visibility:visible; transition-delay:0s;}
+  .dr-scrim{position:absolute; inset:0; background:rgba(8,20,13,.55); opacity:0; transition:opacity .25s;}
+  #drawer.open .dr-scrim{opacity:1;}
+  .dr-panel{position:absolute; top:0; bottom:0; left:0; width:78%; max-width:300px; background:var(--soil); color:var(--parchment); padding:18px 14px; display:flex; flex-direction:column; gap:4px; transform:translateX(-100%); transition:transform .25s ease; overflow-y:auto;}
+  #drawer.open .dr-panel{transform:none;}
+  .dr-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .dr-head b{font-family:'Fraunces',serif; font-size:20px;}
+  .dr-x{background:none; border:none; color:var(--muted); font-size:26px; line-height:1; cursor:pointer; padding:0 4px;}
+  .dr-user{font-size:11.5px; color:var(--muted); margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--soil2);}
+  .dr-item{display:flex; align-items:center; gap:12px; width:100%; background:none; border:none; color:var(--parchment); font-family:'Work Sans'; font-size:14px; font-weight:600; padding:12px 10px; border-radius:12px; cursor:pointer; text-align:left;}
+  .dr-item svg{width:19px; height:19px; flex:none; color:var(--muted);}
+  .dr-item:hover,.dr-item.active{background:var(--soil2);}
+  .dr-item.active svg{color:var(--leaf);}
+  .dr-sep{height:1px; background:var(--soil2); margin:8px 0;}
+  .dr-item.out{margin-top:auto; color:#F0B49A;}
+  .dr-item.out svg{color:#F0B49A;}
+  #pz-card > b{display:none;}
+  .rp-zones{background:#E3ECD6; border-radius:12px; padding:4px 16px; margin-bottom:16px;}
+
   @media print{
+    .phone{height:auto !important; overflow:visible !important;}
+    #screen-reports{overflow:visible !important;}
+    #drawer{display:none !important;}
     body *{visibility:hidden;}
     .screen{display:none !important;}
     #screen-reports{display:block !important; visibility:visible; position:absolute; top:0; left:0; width:100%; padding:0;}
@@ -444,8 +479,6 @@
     <button data-s="alerts" onclick="go('alerts')">
       <span class="nav-badge" id="alerts-badge"></span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a5 5 0 00-5 5v3l-2 4h14l-2-4V8a5 5 0 00-5-5z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg>Alerts</button>
-    <button data-s="reports" onclick="go('reports')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h6M9 17h6"/></svg>Reports</button>
   </nav>
 </div>
 
@@ -966,6 +999,7 @@ async function sendChat(text){
   <script src="farmplus.js"></script>
   <script src="weather.js"></script>
   <script src="smartcare.js"></script>
+  <script src="menu.js"></script>
   <script>if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
 
 </body>

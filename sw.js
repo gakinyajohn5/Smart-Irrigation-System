@@ -1,6 +1,6 @@
 /* Offline support: app shell is cached; AI/voice functions always go to the network. */
-const CACHE = 'smart-irrigation-v10';
-const SHELL = ['/', '/index.html', '/live.js', '/tour.js', '/farmplus.js', '/weather.js', '/crops.js', '/smartcare.js', '/twin.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'smart-irrigation-v11';
+const SHELL = ['/', '/index.html', '/live.js', '/tour.js', '/farmplus.js', '/weather.js', '/crops.js', '/smartcare.js', '/menu.js', '/twin.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
