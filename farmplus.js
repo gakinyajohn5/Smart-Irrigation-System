@@ -71,7 +71,8 @@
     }).join('') + '<div id="dt-msg" style="font-size:12px;color:var(--leaf-dk);min-height:16px;margin:8px 0 14px;"></div>';
   nav.before(scr);
   var fc = $('fc-card'), anchor = fc && fc.previousElementSibling; if (anchor) anchor.insertAdjacentHTML('beforebegin', '<button class="btn block" style="margin-bottom:10px;" onclick="go(\'data\')">\uD83D\uDCCA Full data &amp; irrigate</button>');
-  function row(k, v) { return '<div class="report-row"><span>' + k + '</span><span class="v">' + v + '</span></div>'; }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function row(k, v) { return '<div class="report-row"><span>' + k + '</span><span class="v">' + esc(v) + '</span></div>'; }
   function hhmm(c) { return ('0' + Math.floor(c)).slice(-2) + ':' + ('0' + Math.floor((c % 1) * 60)).slice(-2); }
   function draw(d, live) {
     if (!d) return;
