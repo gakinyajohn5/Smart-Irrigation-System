@@ -127,6 +127,7 @@ const COL = ['#8be36b', '#5ef2d6', '#c084fc'], NAMES = ['Greenhouses', 'Open Fie
 const PX = [330, 560, 790], LOW = 30, STOP = 50, SOIL_TOP = 300, SOIL_H = 220;
 const fresh = () => ({ sun: 80, batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
   zones: [{m:62,t:29,h:71,bt:29},{m:55,t:26,h:64,bt:26},{m:58,t:24,h:66,bt:24}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false})) });
+const KEY = 'rootline-twin-state';
 let S = fresh(), hist = [[], [], []], pkts = 0, beat = 0, lastSend = [0, 0, 0], demo = null;
 const lerp = (a, b, k) => Math.round(a + (b - a) * k), mix = (c1, c2, k) => '#' + [0, 2, 4].map(i => lerp(parseInt(c1.substr(1 + i, 2), 16), parseInt(c2.substr(1 + i, 2), 16), k).toString(16).padStart(2, '0')).join('');
 
@@ -165,7 +166,7 @@ function setMaster(m) { S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify
 function refill() { S.tank = 100; log('SYS', 'tank', 'refill valve open, level 100%', '#8be36b'); tick(true); }
 function togglePres() { document.documentElement.classList.toggle('pres'); $('presBtn').classList.toggle('on'); }
 function drought() { clearInterval(demo); demo = setInterval(() => { const z = S.zones[1]; if (z.m > 18) setMoist(1, z.m - 2); else clearInterval(demo); }, 120); }
-function resetAll() { clearInterval(demo); S = fresh(); hist = [[], [], []]; $('toasts').innerHTML = ''; $('term').innerHTML = ''; log('SYS', 'reset', 'digital twin restored', '#7d8bb3'); tick(true); }
+function resetAll() { clearInterval(demo); try { localStorage.removeItem(KEY); } catch (e) {} S = fresh(); hist = [[], [], []]; $('toasts').innerHTML = ''; $('term').innerHTML = ''; log('SYS', 'reset', 'digital twin restored', '#7d8bb3'); tick(true); }
 
 /* ---------- Drag the sun (sunlight) or the soil (moisture) ---------- */
 let drag = null; const scene = $('scene');
@@ -271,6 +272,10 @@ function pubState(force) {                                // retained, so a phon
     zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode })) }), { retain: true });
 }
 function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }
+
+/* ---------- Remember the dashboard between visits ---------- */
+try { const sv = JSON.parse(localStorage.getItem(KEY)); if (sv && sv.zones && sv.zones.length === 3) { S = Object.assign(fresh(), sv); S.zones = S.zones.map(z => Object.assign({ mode:'auto', on:false, latch:false, alerted:false, p:false }, z)); } } catch (e) {}
+setInterval(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 1000);
 
 /* ---------- Boot ---------- */
 log('SYS', 'esp32-01', 'boot OK, Wi-Fi connected, MQTT session open', '#8be36b');
