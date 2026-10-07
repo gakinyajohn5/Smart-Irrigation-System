@@ -129,8 +129,8 @@ svg text{font-family:'IBM Plex Mono',monospace}
 const $ = id => document.getElementById(id), NS = 'http://www.w3.org/2000/svg';
 const COL = ['#8be36b', '#5ef2d6', '#c084fc'], NAMES = ['Greenhouses', 'Open Field', 'Orchard'];
 const PX = [330, 560, 790], LOW = 30, STOP = 50, SOIL_TOP = 300, SOIL_H = 220, IRR_H = 17, CRIT = 20;
-const fresh = () => ({ sun: 80, clock: 12, auto: true, temp: 26, rp0: 20, rp1: 30, askAns: null, rained: false, panelFault: false, battFault: false, faults: [], batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
-  zones: [{m:62,t:29,h:71,bt:29,ph:6.4},{m:55,t:26,h:64,bt:26,ph:5.1},{m:58,t:24,h:66,bt:24,ph:6.8}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false, force:0})) });
+const fresh = () => ({ sun: 80, clock: 12, auto: true, temp: 26, rp0: 20, rp1: 30, askAns: null, rained: false, pause: 0, panelFault: false, battFault: false, faults: [], batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
+  zones: [{m:62,t:29,h:71,bt:29,ph:6.4},{m:55,t:26,h:64,bt:26,ph:5.1},{m:58,t:24,h:66,bt:24,ph:6.8}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false, force:0, stop:0 })) });
 const KEY = 'rootline-twin-state';
 let S = fresh(), hist = [[], [], []], pkts = 0, beat = 0, lastSend = [0, 0, 0], demo = null;
 const lerp = (a, b, k) => Math.round(a + (b - a) * k), mix = (c1, c2, k) => '#' + [0, 2, 4].map(i => lerp(parseInt(c1.substr(1 + i, 2), 16), parseInt(c2.substr(1 + i, 2), 16), k).toString(16).padStart(2, '0')).join('');
@@ -173,12 +173,12 @@ $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97
 
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
-const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? z.m < 90 : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch && !((S.skip || S.heat || S.hold2) && z.m >= CRIT) : z.on);   // rain: auto/manual valves stay shut
+const wants = z => S.rain || S.master === 'off' || S.pause > 0 || z.stop > 0 ? false : S.master === 'on' ? z.m < 90 : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch && !((S.skip || S.heat || S.hold2) && z.m >= CRIT) : z.on);   // rain: auto/manual valves stay shut
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
-function toggleValve(i) { const z = S.zones[i]; if (z.mode !== 'manual') return; if (!z.on && S.rain) { notify(`Zone ${i+1} valve locked: it is raining`); return; } if (!z.on && z.m >= 90) { notify(`Zone ${i+1} valve refused: soil already saturated (${Math.round(z.m)}%)`); return; } z.on = !z.on; tick(true); }
-function setMaster(m) { if (m === 'on' && S.rain) { notify('Pump forced ON refused: it is raining'); return; } S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
+function toggleValve(i) { const z = S.zones[i]; if (z.mode !== 'manual') return; if (!z.on && S.rain) { tell(`Zone ${i+1} valve locked: it is raining`); return; } if (!z.on && z.m >= 90) { tell(`Zone ${i+1} valve refused: soil already saturated (${Math.round(z.m)}%)`); return; } z.on = !z.on; tick(true); }
+function setMaster(m) { if (m === 'on' && S.rain) { tell('Pump forced ON refused: it is raining'); return; } S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
 function toggleRain() { S.rain = !S.rain; if (S.rain) { if (S.master === 'on') S.master = 'auto'; S.zones.forEach(z => { z.force = 0; z.on = false; }); } log('SYS', 'weather', S.rain ? 'rain started: irrigation paused, soil absorbing, tank filling' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
 function setPh(i, d) { const z = S.zones[i]; z.ph = Math.max(3.5, Math.min(9, +(z.ph + d).toFixed(1))); log('SYS', `zone${i+1}/ph`, 'soil pH set to ' + z.ph.toFixed(1), COL[i]); tick(true); }
 function toggleAuto() { S.auto = !S.auto; log('SYS', 'sun', S.auto ? 'day/night cycle ON' : 'manual sun (drag the sun)', '#ffc857'); tick(true); }
@@ -186,17 +186,20 @@ function skipTo(h) { S.clock = h; S.auto = true; tick(true); }
 function toggleFault(k) { const f = k === 'panel' ? 'panelFault' : 'battFault'; S[f] = !S[f]; log('SYS', 'fault', `${k} fault ${S[f] ? 'injected' : 'cleared'}`, '#ff5d73'); tick(true); }
 function handleCmd(c) {
   if (!c || typeof c !== 'object') return;
+  if (c.type === 'pause') { const h = Math.max(1, Math.min(168, +c.hours || 0)); S.pause = h; S.zones.forEach(z => { z.force = 0; z.on = false; }); notify(`Farmer paused irrigation for ${h} h`, 'info'); tick(true); return; }
+  if (c.type === 'resume') { S.pause = 0; notify('Farmer resumed irrigation', 'info'); tick(true); return; }
   if (c.type === 'decision') { S.askAns = c.irrigate ? 'yes' : 'no'; notify(c.irrigate ? 'Farmer chose to irrigate tonight despite rain tomorrow' : 'Farmer chose to skip irrigation: rain expected tomorrow', 'info'); tick(true); return; }
   const i = +c.zone, z = S.zones[i]; if (!z) return;
   if (c.type === 'irrigate') {
     log('SUB', 'farm/cmd/irrigate', JSON.stringify(c), '#ffc857'); fly('#ffc857', true);
+    if (S.pause > 0) { notify(`App irrigation refused: paused by you (${S.pause.toFixed(1)} h left). Resume first.`); return; }
     if (S.rain) { notify(`App irrigation refused for Zone ${i+1}: it is raining`); return; }
     if (z.m >= 90) { notify(`App irrigation refused for Zone ${i+1}: soil already saturated (${Math.round(z.m)}%)`); return; }
     if (S.master === 'off') { notify('App irrigation refused: master switch is OFF'); return; }
     if (!canRun()) { notify('App irrigation refused: ' + (S.tank <= .5 ? 'tank empty' : 'battery dead')); return; }
-    z.force = Date.now() + Math.min(60, Math.max(5, +c.seconds || 15)) * (S.heat ? 500 : 1000);   // strong sun: half-length cycle
-    notify(`Zone ${i+1} irrigation started from the app` + (S.heat ? ' (shortened: strong sun)' : ''), 'info'); tick(true);
-  } else if (c.type === 'stop') { z.force = 0; tick(true); }
+    z.stop = 0; z.force = Date.now() + Math.min(60, Math.max(5, +c.seconds || 15)) * (S.heat ? 500 : 1000);   // strong sun: half-length cycle
+    tick(true);
+  } else if (c.type === 'stop') { z.force = 0; z.on = false; z.stop = 3; tick(true); }   // stop now and keep this zone off for 3 h
 }
 function checkFaults(Wx, W, n, instant) {
   const f = [], key = m => m.replace(/\d+\.\d+/g, '');
@@ -257,15 +260,15 @@ function fly(c, down) {                                   // glowing packet alon
   const r = document.createElementNS(NS, 'circle'); r.setAttribute('cx', 290); r.setAttribute('cy', 159); r.setAttribute('r', 14); r.setAttribute('fill', 'none'); r.setAttribute('stroke', c); r.setAttribute('class', 'ring');
   $('rings').appendChild(r); setTimeout(() => r.remove(), 1000);
 }
-function notify(msg, type = 'warn') {
-  pubEvent(msg, type);                                    // mirror every alert to the deployed app                      // big push-notification banner
-  const n = document.createElement('div'); n.className = 'toast ' + type; n.textContent = (type === 'warn' ? '\u26A0 ' : '\u2714 ') + msg;
-  $('toasts').prepend(n); while ($('toasts').children.length > 3) $('toasts').lastChild.remove(); setTimeout(() => n.remove(), 7000);
+function notify(msg, type = 'warn') {                      // user alerts live in the app: send them there, only log here
+  pubEvent(msg, type); log('EVT', 'app/notify', msg, type === 'warn' ? '#ff5d73' : '#8be36b');
 }
+function tell(msg) { log('SYS', 'console', msg, '#ffc857'); }   // operator-only feedback, not sent to the app
 
 /* ---------- Simulation step (500 ms, plus instantly on every drag) ---------- */
 function tick(instant) {
   if (!instant && S.auto) { const c = S.clock + .05; if (c >= 24) newDay(); S.clock = c % 24; S.sun = Math.max(0, Math.round(100 * Math.sin(Math.PI * (S.clock - 6) / 12))); }   // a full day = 4 minutes
+  if (!instant && S.pause > 0) { S.pause = Math.max(0, +(S.pause - .05).toFixed(2)); if (S.pause === 0) notify('Pause ended: irrigation resumed', 'info'); }   // counts in simulated hours
   if (S.rain) S.rained = true;
   S.skip = S.rp0 > 75 && (S.rained || S.clock < IRR_H);                 // rain likely today: skip, recheck at IRR_H
   S.heat = S.sun >= 70;                                                 // strong sun: hold to cooler hours
@@ -273,6 +276,7 @@ function tick(instant) {
   S.ask = S.hold2 && S.askAns == null; advise();
   const V = S.sun ? 12.5 + 7 * S.sun / 100 : 0, I = 6 * S.sun / 100, Wx = V * I, W = Wx * (S.panelFault ? .2 : 1); let n = 0;
   S.zones.forEach((z, i) => {
+    if (!instant && z.stop > 0) z.stop = Math.max(0, +(z.stop - .05).toFixed(2));          // farmer 'Stop' hold, in simulated hours
     if (z.force && z.m >= 90) { z.force = 0; notify(`Zone ${i+1} irrigation stopped: soil saturated (${Math.round(z.m)}%)`, 'info'); }
     if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
     const p = pumping(z);
@@ -281,9 +285,13 @@ function tick(instant) {
       z.t = Math.max(z.bt - 6, Math.min(z.bt + 3, z.t + (Math.random() - .5) * .3 - (S.rain ? .12 : 0) + (!S.rain && z.t < z.bt ? .05 : 0))); z.h = Math.min(99, 35 + z.m * .45 + (S.rain ? 18 : 0) + (Math.random() - .5) * 2);
     }
     if (p) n++;
-    if (z.m < LOW && !z.alerted) { z.alerted = true; notify(`WARNING: Zone ${i+1} Soil Dry - ${p ? 'Automatic Pump Engaged' : 'Pump Unavailable (check power, tank or mode)'}`); }
+    if (z.m < LOW && !z.alerted) { z.alerted = true; notify(`WARNING: Zone ${i+1} Soil Dry - ${p ? 'Automatic Pump Engaged' : S.pause > 0 ? 'Irrigation paused by you' : 'Pump Unavailable (check power, tank or mode)'}`); }
     if (z.m >= LOW + 5) z.alerted = false;
-    if (p !== z.p) { z.p = p; send(i); if (!p && z.m >= STOP) notify(`Zone ${i+1} restored to ${Math.round(z.m)}% moisture`, 'info'); }
+    if (p !== z.p) { z.p = p; send(i);
+      if (p) notify(`Irrigation started in Zone ${i+1}: ${z.force > Date.now() ? 'requested from the app' + (S.heat ? ' (shortened: strong sun)' : '') : z.mode === 'manual' ? 'manual valve' : S.master === 'on' ? 'pump forced on' : 'soil is dry'}. You can stop it from the app.`, 'info');
+      else if (z.stop > 0) notify(`Irrigation in Zone ${i+1} stopped by you; it stays off for ${z.stop} h`, 'info');
+      else if (z.m >= STOP) notify(`Zone ${i+1} restored to ${Math.round(z.m)}% moisture`, 'info');
+      else notify(`Irrigation stopped in Zone ${i+1} (${Math.round(z.m)}% moisture)`, 'info'); }
     if (!instant) hist[i].push(z.m); if (hist[i].length > 60) hist[i].shift();
   });
   if (!instant) S.batt = Math.max(0, Math.min(100, S.batt + W * .0025 - n * .12 - .01 - (S.battFault ? .12 : 0)));        // solar charge minus pump load
@@ -305,7 +313,7 @@ function render(V, I, W, n) {
   const h = S.batt <= 5 ? ['PUMP LOCKOUT', '#ff5d73'] : S.batt < 20 ? ['CRITICAL', '#ff5d73'] : S.sun < 15 ? ['LOW SUN', '#ffc857'] : ['NOMINAL', '#8be36b'];
   $('health').textContent = h[0]; $('health').style.color = h[1];
   const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
-  $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.rain ? 'RAIN LOCKOUT' : S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
+  $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.pause > 0 ? 'FARMER PAUSE' : S.rain ? 'RAIN LOCKOUT' : S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
   $('rainG').setAttribute('opacity', S.rain ? 1 : 0); $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
   $('tmpBtn').textContent = `Hotter (${S.temp} C)`; $('rp0Btn').textContent = `Rain today ${S.rp0}%`; $('rp1Btn').textContent = `Rain tomorrow ${S.rp1}%`; $('rp0Btn').classList.toggle('on', S.rp0 > 75); $('rp1Btn').classList.toggle('on', S.rp1 > 75);
   const hh = Math.floor(S.clock), mm = Math.floor((S.clock % 1) * 60);
@@ -344,7 +352,7 @@ try {
 } catch (e) { setNet('app link: offline (twin still works)', '#ff5d73'); }
 function pubState(force) {                                // retained, so a phone that opens late gets the latest values
   const now = performance.now(); if (!net || !net.connected || (!force && now - lastPub < 250)) return; lastPub = now;
-  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain, clock: +S.clock.toFixed(2), auto: !!S.auto, solar: S.solarW || 0, faults: S.faults || [], temp: S.temp, rp0: S.rp0, rp1: S.rp1, skip: !!S.skip, heat: !!S.heat, ask: !!S.ask, irrH: IRR_H,
+  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain, clock: +S.clock.toFixed(2), auto: !!S.auto, solar: S.solarW || 0, faults: S.faults || [], temp: S.temp, rp0: S.rp0, rp1: S.rp1, skip: !!S.skip, heat: !!S.heat, ask: !!S.ask, irrH: IRR_H, pause: +(S.pause || 0).toFixed(2),
     zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode, ph: +z.ph.toFixed(1) })) }), { retain: true });
 }
 function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }

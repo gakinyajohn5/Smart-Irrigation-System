@@ -13,6 +13,11 @@
   function badge() { if (btn) btn.innerHTML = '<span class="dot"></span>' + (linked ? 'LIVE \u00B7 TWIN' : 'LIVE'); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function $(id) { return document.getElementById(id); }
+  function banner(warn, msg) {                                   // pop-up at the top of the app for 6 s
+    var b = document.createElement('div');
+    b.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;max-width:90%;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);color:#fff;background:' + (warn ? '#b4531a' : '#2F5A3E');
+    b.textContent = (warn ? '\u26A0 ' : '\u2713 ') + msg; document.body.appendChild(b); setTimeout(function () { b.remove(); }, 6000);
+  }
 
   // MQTT data is untrusted (public broker): coerce every field to a safe type and range before use
   function num(v, lo, hi, def) { v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; }
@@ -21,7 +26,7 @@
     return {
       ts: num(d.ts, 0, 8.64e15, 0), sun: num(d.sun, 0, 100, 0), tank: num(d.tank, 0, 100, 0), batt: num(d.batt, 0, 100, 0),
       master: ['auto', 'on', 'off'].indexOf(d.master) >= 0 ? d.master : 'auto', rain: !!d.rain, clock: num(d.clock, 0, 24, 0), auto: !!d.auto,
-      solar: num(d.solar, 0, 1000, 0), temp: num(d.temp, -10, 60, 26), rp0: num(d.rp0, 0, 100, 0), rp1: num(d.rp1, 0, 100, 0), skip: !!d.skip, heat: !!d.heat, ask: !!d.ask, faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
+      solar: num(d.solar, 0, 1000, 0), temp: num(d.temp, -10, 60, 26), rp0: num(d.rp0, 0, 100, 0), rp1: num(d.rp1, 0, 100, 0), pause: num(d.pause, 0, 168, 0), skip: !!d.skip, heat: !!d.heat, ask: !!d.ask, faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
       zones: d.zones.slice(0, 3).map(function (z) {
         z = z || {};
         return { m: num(z.m, 0, 100, 0), t: num(z.t, -20, 60, 20), h: Math.round(num(z.h, 0, 100, 0)), p: z.p ? 1 : 0, mode: z.mode === 'manual' ? 'manual' : 'auto', ph: num(z.ph, 3.5, 9, 6.5) };
@@ -72,7 +77,7 @@
   c.on('connect', function () { c.subscribe([S, E]); });
   c.on('message', function (topic, buf) {
     var d; try { d = JSON.parse(buf.toString()); } catch (e) { return; }
-    if (topic === E) { if (!d || typeof d !== 'object') return; pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
+    if (topic === E) { if (!d || typeof d !== 'object') return; banner(d.level === 'warn', String(d.msg).slice(0, 200)); pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
     d = clean(d); if (!d) return;
     if (!d.ts || Math.abs(Date.now() - d.ts) > 30000) { apply(d, false); return; }   // old retained message: show it as "last known", not live
     lastMsg = Date.now(); if (!linked) { linked = true; badge(); }
