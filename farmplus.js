@@ -12,7 +12,6 @@
   };
   var anchor = $('lbl-rec'); if (!anchor) return;
   anchor.insertAdjacentHTML('beforebegin',
-    '<button class="btn ghost block" id="rain-btn" style="margin-bottom:14px;">\uD83C\uDF27 Simulate rain (demo)</button>' +
     '<h2 class="section">Smart forecast</h2><div class="gauge" id="fc-card" style="margin-bottom:16px;text-align:left;"><b id="fc-main" style="font-size:15px;">…</b><span id="fc-sub"></span></div>' +
     '<h2 class="section">Crop calendar</h2><div id="cal-card" style="margin-bottom:18px;"></div>');
   function forecast() {
@@ -40,15 +39,13 @@
   renderWeather = function () {
     if (simRain) rainSoon = true;
     _rw();
-    if (simRain) { $('lbl-rain').textContent = 'Simulated rain (demo)'; $('weather-icon').textContent = '\uD83C\uDF27\uFE0F'; }
+    if (simRain) { $('lbl-rain').textContent = 'Raining at the farm (live)'; $('weather-icon').textContent = '\uD83C\uDF27\uFE0F'; }
   };
   window.setSimRain = function (on) {
     on = !!on; if (on === simRain) return; simRain = on;
     rainSoon = on || realRain(); renderWeather(); forecast();
-    $('rain-btn').textContent = on ? '\u2600\uFE0F Stop simulated rain' : '\uD83C\uDF27 Simulate rain (demo)';
-    pushAlert(on ? 'info' : 'warn', on ? '\uD83C\uDF27' : '\u2600', on ? 'Irrigation skipped \u2014 rain forecast' : 'Simulated rain ended', 'Demo');
+    pushAlert(on ? 'info' : 'warn', on ? '\uD83C\uDF27' : '\u2600', on ? 'Irrigation skipped \u2014 rain at the farm' : 'Rain stopped', 'Live from digital twin');
   };
-  $('rain-btn').addEventListener('click', function () { window.setSimRain(!simRain); });
   setInterval(function () {                                  // soil absorbs rain in the app's own simulation
     if (simRain && typeof simOn !== 'undefined' && simOn && !irrigating) { moisture = Math.min(95, moisture + 1.5); paintRing(); }
   }, 3000);
@@ -73,7 +70,7 @@
         '<div style="display:flex;gap:8px;margin:8px 0 4px;"><button class="btn" data-irr="' + i + '">\uD83D\uDCA7 Irrigate 15 s</button><button class="btn ghost" data-stop="' + i + '">Stop</button></div>';
     }).join('') + '<div id="dt-msg" style="font-size:12px;color:var(--leaf-dk);min-height:16px;margin:8px 0 14px;"></div>';
   nav.before(scr);
-  var anchor = $('rain-btn'); if (anchor) anchor.insertAdjacentHTML('beforebegin', '<button class="btn block" style="margin-bottom:10px;" onclick="go(\'data\')">\uD83D\uDCCA Full data &amp; irrigate</button>');
+  var fc = $('fc-card'), anchor = fc && fc.previousElementSibling; if (anchor) anchor.insertAdjacentHTML('beforebegin', '<button class="btn block" style="margin-bottom:10px;" onclick="go(\'data\')">\uD83D\uDCCA Full data &amp; irrigate</button>');
   function row(k, v) { return '<div class="report-row"><span>' + k + '</span><span class="v">' + v + '</span></div>'; }
   function hhmm(c) { return ('0' + Math.floor(c)).slice(-2) + ':' + ('0' + Math.floor((c % 1) * 60)).slice(-2); }
   function draw(d, live) {

@@ -23,6 +23,8 @@ svg text{font-family:'IBM Plex Mono',monospace}
 .pp{stroke:#16304f;stroke-width:9;fill:none;stroke-linecap:round}
 .fw{stroke:var(--aqua);stroke-width:3;fill:none;stroke-dasharray:8 10;opacity:0}
 .fw.on{opacity:1;animation:dash .6s linear infinite} @keyframes dash{to{stroke-dashoffset:-18}}
+.rd{animation:rain .55s linear infinite} @keyframes rain{from{transform:translateY(-30px);opacity:0}15%{opacity:.9}to{transform:translateY(540px);opacity:.9}}
+.splash{transform-box:fill-box;transform-origin:center;animation:rg .6s ease-out infinite}
 .drop{animation:fall .6s linear infinite} @keyframes fall{from{transform:translateY(0);opacity:1}to{transform:translateY(48px);opacity:0}}
 .sb{cursor:pointer} .sb rect{fill:#121a33;stroke:#3a4a78} .sb:hover rect{stroke:var(--aqua)} .sb.on rect{fill:var(--aqua)} .sb.on text{fill:#04120f}
 .blink{animation:bl .7s infinite} @keyframes bl{50%{opacity:.3}}
@@ -157,6 +159,18 @@ $('bars').innerHTML = NAMES.map((n, i) => `<div><div class="flex justify-between
   + `<div class="flex justify-between lbl pt-1"><span>Tank <b id="aT">85%</b></span><span>Pump <b id="aP">IDLE</b></span></div>`;
 $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97) % 1180 + 10}" cy="${(k * 53) % 230 + 8}" r="${k % 3 ? .9 : 1.5}"/>`).join('');
 
+/* ---------- Rain visuals: clouds, falling droplets, splashes on the soil ---------- */
+(function () {
+  let h = '<g id="rainG" pointer-events="none" opacity="0" style="transition:opacity .5s">';
+  h += [120, 330, 560, 790, 1020].map((x, k) => `<ellipse cx="${x}" cy="${46 + (k % 2) * 14}" rx="120" ry="30" fill="#5b6784" opacity=".92"/><ellipse cx="${x + 60}" cy="${38 + (k % 2) * 10}" rx="80" ry="26" fill="#6b7899" opacity=".92"/>`).join('');
+  for (let k = 0; k < 90; k++) {
+    const x = (k * 137) % 1180 + 10, d = ((k * 53) % 55) / 100, dur = .45 + (k % 5) * .06;
+    h += `<line class="rd" x1="${x}" y1="80" x2="${x - 4}" y2="96" stroke="#9fd8ff" stroke-width="2" stroke-linecap="round" style="animation-delay:-${d}s;animation-duration:${dur}s"/>`;
+  }
+  PX.forEach(x => { for (let k = 0; k < 4; k++) h += `<ellipse class="splash" cx="${x + 25 + k * 45}" cy="302" rx="7" ry="2" fill="none" stroke="#9fd8ff" style="animation-delay:-${k * .15}s"/>`; });
+  $('scene').insertAdjacentHTML('beforeend', h + '</g>');
+})();
+
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
 const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : (z.force || 0) > Date.now() ? true : S.rain ? false : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
@@ -165,7 +179,7 @@ function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t -
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
 function toggleValve(i) { const z = S.zones[i]; if (z.mode === 'manual') { z.on = !z.on; tick(true); } }
 function setMaster(m) { S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
-function toggleRain() { S.rain = !S.rain; log('SYS', 'weather', S.rain ? 'rain started (simulated): irrigation paused, soil absorbing' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
+function toggleRain() { S.rain = !S.rain; log('SYS', 'weather', S.rain ? 'rain started: irrigation paused, soil absorbing, tank filling' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
 function setPh(i, d) { const z = S.zones[i]; z.ph = Math.max(3.5, Math.min(9, +(z.ph + d).toFixed(1))); log('SYS', `zone${i+1}/ph`, 'soil pH set to ' + z.ph.toFixed(1), COL[i]); tick(true); }
 function toggleAuto() { S.auto = !S.auto; log('SYS', 'sun', S.auto ? 'day/night cycle ON' : 'manual sun (drag the sun)', '#ffc857'); tick(true); }
 function skipTo(h) { S.clock = h; S.auto = true; tick(true); }
@@ -244,8 +258,8 @@ function tick(instant) {
     if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
     const p = pumping(z);
     if (!instant) {
-      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else if (S.rain) z.m = Math.min(100, z.m + .5); else z.m = Math.max(0, z.m - .03);
-      z.t = Math.max(z.bt - 3, Math.min(z.bt + 3, z.t + (Math.random() - .5) * .3)); z.h = Math.min(99, 35 + z.m * .45 + (Math.random() - .5) * 2);
+      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else if (S.rain) z.m = Math.min(100, z.m + .6); else z.m = Math.max(0, z.m - .03);
+      z.t = Math.max(z.bt - 6, Math.min(z.bt + 3, z.t + (Math.random() - .5) * .3 - (S.rain ? .12 : 0) + (!S.rain && z.t < z.bt ? .05 : 0))); z.h = Math.min(99, 35 + z.m * .45 + (S.rain ? 18 : 0) + (Math.random() - .5) * 2);
     }
     if (p) n++;
     if (z.m < LOW && !z.alerted) { z.alerted = true; notify(`WARNING: Zone ${i+1} Soil Dry - ${p ? 'Automatic Pump Engaged' : 'Pump Unavailable (check power, tank or mode)'}`); }
@@ -256,6 +270,7 @@ function tick(instant) {
   if (!instant) S.batt = Math.max(0, Math.min(100, S.batt + W * .0025 - n * .12 - .01 - (S.battFault ? .12 : 0)));        // solar charge minus pump load
   if (S.tank < 15 && !S.lowTank) { S.lowTank = true; notify('Tank level critical: refill soon'); } if (S.tank > 25) S.lowTank = false;
   if (S.batt < 20 && !S.lowBatt) { S.lowBatt = true; notify('Battery low: check sunlight'); } if (S.batt > 30) S.lowBatt = false;
+  if (!instant && S.rain && S.tank < 100) { S.tank = Math.min(100, S.tank + .4); if (S.tank >= 100) notify('Rain harvesting: water tank is full', 'info'); }   // rainwater runs into the tank
   if (!instant && ++beat % 6 === 0) S.zones.forEach((z, i) => send(i));                           // 3 s heartbeat
   checkFaults(Wx, W, n, instant); S.solarW = Math.round(W);
   render(V, I, W, n); pubState();
@@ -272,7 +287,7 @@ function render(V, I, W, n) {
   $('health').textContent = h[0]; $('health').style.color = h[1];
   const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
   $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
-  $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
+  $('rainG').setAttribute('opacity', S.rain ? 1 : 0); $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
   const hh = Math.floor(S.clock), mm = Math.floor((S.clock % 1) * 60);
   $('sunBtn').textContent = (S.auto ? 'Sun: AUTO ' : 'Sun: MANUAL ') + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + (S.sun === 0 ? ' (night)' : '');
   $('pfBtn').classList.toggle('on', !!S.panelFault); $('bfBtn').classList.toggle('on', !!S.battFault);
