@@ -16,6 +16,7 @@
     var z = d && d.zones && d.zones[ZONE]; if (!z) return;
     if (fromTwin) simOn = false;                                   // twin is driving: stop the random simulation
     moisture = z.m; battery = d.batt; tank = d.tank; irrigating = !!z.p;
+    if (typeof setSimRain === 'function') setSimRain(!!d.rain);   // dashboard rain -> app rain
     paintRing();
     $('tank-fill').style.width = tank + '%';
     $('tank-val').textContent = Math.round(tank) + '%';

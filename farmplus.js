@@ -12,6 +12,7 @@
   };
   var anchor = $('lbl-rec'); if (!anchor) return;
   anchor.insertAdjacentHTML('beforebegin',
+    '<button class="btn ghost block" id="rain-btn" style="margin-bottom:14px;">\uD83C\uDF27 Simulate rain (demo)</button>' +
     '<h2 class="section">Smart forecast</h2><div class="gauge" id="fc-card" style="margin-bottom:16px;text-align:left;"><b id="fc-main" style="font-size:15px;">…</b><span id="fc-sub"></span></div>' +
     '<h2 class="section">Crop calendar</h2><div id="cal-card" style="margin-bottom:18px;"></div>');
   function forecast() {
@@ -32,6 +33,25 @@
     });
     $('cal-card').innerHTML = html || '<div style="font-size:12px">No calendar for these crops yet.</div>';
   }
+  /* Rain simulation: the forecast/temperature shown stay REAL (Open-Meteo); this only layers a demo rain on top */
+  var simRain = false;
+  function realRain() { return !!(typeof weather !== 'undefined' && weather && weather.hoursAway !== -1); }
+  var _rw = renderWeather;
+  renderWeather = function () {
+    if (simRain) rainSoon = true;
+    _rw();
+    if (simRain) { $('lbl-rain').textContent = 'Simulated rain (demo)'; $('weather-icon').textContent = '\uD83C\uDF27\uFE0F'; }
+  };
+  window.setSimRain = function (on) {
+    on = !!on; if (on === simRain) return; simRain = on;
+    rainSoon = on || realRain(); renderWeather(); forecast();
+    $('rain-btn').textContent = on ? '\u2600\uFE0F Stop simulated rain' : '\uD83C\uDF27 Simulate rain (demo)';
+    pushAlert(on ? 'info' : 'warn', on ? '\uD83C\uDF27' : '\u2600', on ? 'Irrigation skipped \u2014 rain forecast' : 'Simulated rain ended', 'Demo');
+  };
+  $('rain-btn').addEventListener('click', function () { window.setSimRain(!simRain); });
+  setInterval(function () {                                  // soil absorbs rain in the app's own simulation
+    if (simRain && typeof simOn !== 'undefined' && simOn && !irrigating) { moisture = Math.min(95, moisture + 1.5); paintRing(); }
+  }, 3000);
   var _sf = selectFarm; selectFarm = function () { _sf.apply(this, arguments); calendar(); };
   if (typeof SW !== 'undefined') { SW['Smart forecast'] = 'Utabiri wa busara'; SW['Crop calendar'] = 'Kalenda ya mazao'; }
   forecast(); calendar(); setInterval(forecast, 3000);

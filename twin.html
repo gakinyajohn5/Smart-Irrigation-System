@@ -50,7 +50,7 @@ svg text{font-family:'IBM Plex Mono',monospace}
     <span id="net" style="color:#ffc857">app link: connecting</span>
   </div>
   <div class="flex flex-wrap gap-2">
-    <button class="btn" onclick="drought()">Dry out Zone 2</button><button class="btn" onclick="refill()">Refill tank</button>
+    <button class="btn" onclick="drought()">Dry out Zone 2</button><button class="btn" onclick="refill()">Refill tank</button><button class="btn" id="rainBtn" onclick="toggleRain()">Make it rain</button>
     <button class="btn" id="presBtn" onclick="togglePres()">Presentation Mode</button><button class="btn" onclick="resetAll()">Reset</button>
   </div>
 </header>
@@ -157,12 +157,13 @@ $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97
 
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
-const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : (z.mode === 'auto' ? z.latch : z.on);
+const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : S.rain ? false : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
 function toggleValve(i) { const z = S.zones[i]; if (z.mode === 'manual') { z.on = !z.on; tick(true); } }
 function setMaster(m) { S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
+function toggleRain() { S.rain = !S.rain; log('SYS', 'weather', S.rain ? 'rain started (simulated): irrigation paused, soil absorbing' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
 function refill() { S.tank = 100; log('SYS', 'tank', 'refill valve open, level 100%', '#8be36b'); tick(true); }
 function togglePres() { document.documentElement.classList.toggle('pres'); $('presBtn').classList.toggle('on'); }
 function drought() { clearInterval(demo); demo = setInterval(() => { const z = S.zones[1]; if (z.m > 18) setMoist(1, z.m - 2); else clearInterval(demo); }, 120); }
@@ -210,7 +211,7 @@ function tick(instant) {
     if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
     const p = pumping(z);
     if (!instant) {
-      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else z.m = Math.max(0, z.m - .03);
+      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else if (S.rain) z.m = Math.min(100, z.m + .5); else z.m = Math.max(0, z.m - .03);
       z.t = Math.max(z.bt - 3, Math.min(z.bt + 3, z.t + (Math.random() - .5) * .3)); z.h = Math.min(99, 35 + z.m * .45 + (Math.random() - .5) * 2);
     }
     if (p) n++;
@@ -237,6 +238,7 @@ function render(V, I, W, n) {
   $('health').textContent = h[0]; $('health').style.color = h[1];
   const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
   $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
+  $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
   document.querySelectorAll('#master [data-m]').forEach(x => x.classList.toggle('on', x.dataset.m === S.master));
   S.zones.forEach((z, i) => {
     const dry = z.m < LOW, bad = dry || z.p, m = Math.round(z.m), y = SOIL_TOP + SOIL_H - z.m * SOIL_H / 100, wilt = Math.max(0, Math.min(1, (STOP - z.m) / STOP));
@@ -268,7 +270,7 @@ try {
 } catch (e) { setNet('app link: offline (twin still works)', '#ff5d73'); }
 function pubState(force) {                                // retained, so a phone that opens late gets the latest values
   const now = performance.now(); if (!net || !net.connected || (!force && now - lastPub < 250)) return; lastPub = now;
-  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master,
+  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain,
     zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode })) }), { retain: true });
 }
 function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }
