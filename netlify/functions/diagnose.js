@@ -5,6 +5,7 @@ exports.handler = async function (event) {
   try {
     const { image } = JSON.parse(event.body || '{}');
     if (!image) return { statusCode: 400, body: JSON.stringify({ error: 'No image' }) };
+    if (typeof image !== 'string' || image.length > 4_000_000) return { statusCode: 413, body: JSON.stringify({ error: 'Image too large' }) };
 
     const prompt = `You are a crop health assistant for smallholder farmers in Kenya.
 Look at this photo of a plant leaf. Identify the crop and any disease, pest damage or nutrient problem.

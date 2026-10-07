@@ -7,13 +7,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Smart Irrigation</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14301F">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --soil:#2B2118; --soil2:#3A2C1E; --parchment:#F1EADD; --paper:#FBF8F1;
+    --soil:#14301F; --soil2:#1E4630; --parchment:#EEF3E4; --paper:#F8FBF2;
     --leaf:#7CB518; --leaf-dk:#5C8A11; --marigold:#D98E04; --rust:#C1440E;
-    --ink:#241A10; --line:#5A4938; --muted:#B9AA92;
+    --ink:#241A10; --line:#5E7F66; --muted:#A9C4AE;
     padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px);
     box-sizing:border-box;
   }
@@ -21,7 +24,7 @@
   html,body{height:100%;}
   body{
     margin:0; font-family:'Work Sans',sans-serif; color:var(--ink);
-    background:repeating-linear-gradient(115deg, #241C13 0px, #241C13 2px, #2B2118 2px, #2B2118 46px);
+    background:repeating-linear-gradient(115deg, #0F2418 0px, #0F2418 2px, #14301F 2px, #14301F 46px);
     display:flex; align-items:flex-start; justify-content:center;
     min-height:100vh; padding:28px 12px;
   }
@@ -32,14 +35,14 @@
   .almanac .place{font-family:'Fraunces',serif; font-size:22px; font-weight:600; background:none; border:none; color:var(--parchment); padding:0; cursor:pointer; display:inline-flex; align-items:center; gap:4px;}
   .avatar{width:28px; height:28px; border-radius:50%; background:var(--leaf); color:var(--soil); border:none; font-size:11px; font-weight:700; font-family:'Work Sans'; cursor:pointer; margin-bottom:6px;}
   .avatar.big{width:64px; height:64px; font-size:22px; margin-bottom:0;}
-  .profile-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #E4DAC5; font-size:12.5px;}
+  .profile-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #D5E3C7; font-size:12.5px;}
   .profile-row:last-child{border-bottom:none;}
   .profile-row span.v{color:var(--line); font-weight:600;}
   .toggle-sw{width:36px; height:20px; border-radius:10px; background:var(--leaf); position:relative; cursor:pointer; flex:none;}
-  .toggle-sw.off{background:#D9CDB3;}
+  .toggle-sw.off{background:#C9DAB9;}
   .toggle-sw::after{content:''; position:absolute; top:2px; left:18px; width:16px; height:16px; border-radius:50%; background:var(--paper); transition:left .15s;}
   .toggle-sw.off::after{left:2px;}
-  .farmcard{background:#EDE6D6; border-radius:14px; padding:14px 16px; margin-bottom:12px; cursor:pointer; border:2px solid transparent;}
+  .farmcard{background:#E3ECD6; border-radius:14px; padding:14px 16px; margin-bottom:12px; cursor:pointer; border:2px solid transparent;}
   .farmcard.current{border-color:var(--leaf);}
   .farmcard b{font-family:'Fraunces',serif; font-size:16px; display:block;}
   .farmcard span{font-size:11px; color:var(--line);}
@@ -56,7 +59,7 @@
 
   /* ---- Home ---- */
   .ring-card{background:var(--soil2); color:var(--parchment); border-radius:18px; padding:18px; display:flex; align-items:center; gap:16px; margin-bottom:18px;}
-  .ring{width:78px; height:78px; border-radius:50%; flex:none; background:conic-gradient(var(--leaf) 0turn 0.62turn, #4a3b28 0.62turn 1turn); display:flex; align-items:center; justify-content:center;}
+  .ring{width:78px; height:78px; border-radius:50%; flex:none; background:conic-gradient(var(--leaf) 0turn 0.62turn, #2F5A3E 0.62turn 1turn); display:flex; align-items:center; justify-content:center;}
   .ring-inner{width:58px; height:58px; border-radius:50%; background:var(--soil2); display:flex; flex-direction:column; align-items:center; justify-content:center;}
   .ring-inner b{font-family:'Fraunces',serif; font-size:16px;}
   .ring-inner span{font-size:9px; color:var(--muted);}
@@ -71,13 +74,13 @@
 
   .jars{display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; margin-bottom:20px;}
   .jar{flex:none; width:100px; cursor:pointer; border:none; background:none; font-family:'Work Sans'; text-align:left; padding:0;}
-  .jar-glass{width:74px; height:88px; border:2px solid var(--line); border-radius:8px 8px 14px 14px; position:relative; overflow:hidden; background:#EDE6D6; margin-bottom:6px;}
+  .jar-glass{width:74px; height:88px; border:2px solid var(--line); border-radius:8px 8px 14px 14px; position:relative; overflow:hidden; background:#E3ECD6; margin-bottom:6px;}
   .jar-fill{position:absolute; bottom:0; left:0; right:0; background:var(--leaf); opacity:.75;}
   .jar-ph{position:absolute; top:4px; left:0; right:0; text-align:center; font-size:10px; font-weight:700; color:var(--soil);}
   .jar-name{font-size:12px; font-weight:600;}
   .jar-sub{font-size:10px; color:var(--line); opacity:.7;}
 
-  .note{background:#EDE6D6; border-left:4px solid var(--marigold); border-radius:4px 10px 10px 4px; padding:14px 16px; margin-bottom:16px;}
+  .note{background:#E3ECD6; border-left:4px solid var(--marigold); border-radius:4px 10px 10px 4px; padding:14px 16px; margin-bottom:16px;}
   .note b{font-family:'Fraunces',serif; font-size:14px;}
   .note p{margin:6px 0 10px; font-size:12.5px; line-height:1.5;}
   .note .cost{font-size:12px; font-weight:600; color:var(--leaf-dk);}
@@ -89,7 +92,7 @@
   /* ---- Zone detail ---- */
   .back{background:none; border:none; font-size:13px; color:var(--line); cursor:pointer; margin-bottom:10px; padding:0; font-family:'Work Sans'; font-weight:600;}
   .gauges{display:flex; gap:10px; margin-bottom:16px;}
-  .gauge{flex:1; background:#EDE6D6; border-radius:12px; padding:12px; text-align:center;}
+  .gauge{flex:1; background:#E3ECD6; border-radius:12px; padding:12px; text-align:center;}
   .gauge b{display:block; font-family:'Fraunces',serif; font-size:20px;}
   .gauge span{font-size:10px; color:var(--line);}
   .gauge.warn b{color:var(--rust);}
@@ -102,14 +105,14 @@
   /* ---- Scan screen ---- */
   .viewfinder{aspect-ratio:1/1; border-radius:16px; border:2px dashed var(--muted); background:linear-gradient(160deg,#3d5a1f,#2e4417); display:flex; align-items:center; justify-content:center; margin-bottom:14px; position:relative; overflow:hidden;}
   .viewfinder svg{width:70px; height:70px; opacity:.85;}
-  .viewfinder .hint{position:absolute; bottom:10px; left:0; right:0; text-align:center; color:#EDE6D6; font-size:11px; text-shadow:0 1px 3px rgba(0,0,0,.6);}
-  .result-card{background:#EDE6D6; border-radius:14px; padding:16px; margin-top:6px;}
+  .viewfinder .hint{position:absolute; bottom:10px; left:0; right:0; text-align:center; color:#E3ECD6; font-size:11px; text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .result-card{background:#E3ECD6; border-radius:14px; padding:16px; margin-top:6px;}
   .conf{display:inline-block; background:var(--marigold); color:var(--soil); font-size:11px; font-weight:700; border-radius:12px; padding:2px 10px; margin-bottom:8px;}
   .result-card h3{margin:0 0 6px; font-size:17px;}
   .result-card p{font-size:12.5px; line-height:1.5; margin:0 0 10px;}
 
   /* ---- Alerts ---- */
-  .alert{display:flex; gap:12px; padding:13px 0; border-bottom:1px solid #E4DAC5;}
+  .alert{display:flex; gap:12px; padding:13px 0; border-bottom:1px solid #D5E3C7;}
   .alert:last-child{border-bottom:none;}
   .a-icon{width:34px; height:34px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:15px;}
   .a-icon.critical{background:var(--rust); color:#fff;}
@@ -120,20 +123,20 @@
   .sms-tag{font-size:9.5px; background:var(--soil); color:var(--parchment); border-radius:8px; padding:1px 6px; margin-left:6px;}
 
   /* ---- Ledger ---- */
-  .calc{background:#EDE6D6; border-radius:14px; padding:16px; margin-bottom:16px;}
+  .calc{background:#E3ECD6; border-radius:14px; padding:16px; margin-bottom:16px;}
   .calc label{font-size:11px; color:var(--line); display:block; margin-bottom:4px;}
   .calc input{width:100%; border:1px solid var(--line); background:var(--paper); border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px; font-family:'Work Sans';}
   .calc .total{display:flex; justify-content:space-between; font-family:'Fraunces',serif; font-size:16px; border-top:1px dashed var(--muted); padding-top:10px;}
   .stage-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
-  .stage-track{flex:1; height:6px; background:#DED2B6; border-radius:3px; margin:0 10px; position:relative;}
+  .stage-track{flex:1; height:6px; background:#CFDEC0; border-radius:3px; margin:0 10px; position:relative;}
   .stage-fill{position:absolute; left:0; top:0; height:100%; background:var(--leaf); border-radius:3px; width:58%;}
   .stage-row .lbl{font-size:11px; width:64px;}
   .stage-row .pct{font-size:11px; width:34px; text-align:right; color:var(--line);}
 
   .chips{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
-  .chip{background:#EDE6D6; border:1.5px solid var(--line); color:var(--ink); border-radius:16px; padding:6px 13px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:'Work Sans';}
+  .chip{background:#E3ECD6; border:1.5px solid var(--line); color:var(--ink); border-radius:16px; padding:6px 13px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:'Work Sans';}
   .chip.active{background:var(--leaf); border-color:var(--leaf); color:var(--soil);}
-  .report-row{display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid #E4DAC5; font-size:12px;}
+  .report-row{display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid #D5E3C7; font-size:12px;}
   .report-row:last-child{border-bottom:none;}
   .report-row span.v{font-weight:600;}
   .pl-card{background:var(--soil2); color:var(--parchment); border-radius:14px; padding:16px; margin-bottom:16px;}
@@ -311,7 +314,7 @@
     <div style="font-size:12px; color:var(--line); margin-bottom:14px;">Point your camera at an affected leaf, in daylight.</div>
     <div class="viewfinder">
       <img id="scan-preview" alt="" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:14px;">
-      <svg id="scan-icon" viewBox="0 0 24 24" fill="none" stroke="#EDE6D6" stroke-width="1.5"><path d="M17 8C8 10 5 17 4 21c9-1 13-6 13-13z"/><path d="M17 8c1.5-3 1-5 1-5s-3.5.5-5 3"/></svg>
+      <svg id="scan-icon" viewBox="0 0 24 24" fill="none" stroke="#E3ECD6" stroke-width="1.5"><path d="M17 8C8 10 5 17 4 21c9-1 13-6 13-13z"/><path d="M17 8c1.5-3 1-5 1-5s-3.5.5-5 3"/></svg>
       <div class="hint" id="scan-hint">Hold 15cm away, avoid shadows</div>
     </div>
     <input type="file" id="file-camera" accept="image/*" capture="environment" hidden>
@@ -344,7 +347,7 @@
         <b>Pump running, moisture not rising<span class="sms-tag">SMS</span></b>
         <span>Zone C · check the water line · 8 min ago</span>
         <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
-          <div style="width:40px; height:30px; border-radius:4px; background:linear-gradient(160deg,#4a3b28,#2e4417); flex:none;"></div>
+          <div style="width:40px; height:30px; border-radius:4px; background:linear-gradient(160deg,#2F5A3E,#2e4417); flex:none;"></div>
           <span style="font-size:10.5px; color:var(--leaf-dk);">Field camera auto-captured a photo of the pipe</span>
         </div>
       </div>
@@ -406,7 +409,7 @@
     </div>
 
     <h2 class="section">Preview</h2>
-    <div style="background:#EDE6D6; border-radius:12px; padding:4px 16px; margin-bottom:16px;">
+    <div style="background:#E3ECD6; border-radius:12px; padding:4px 16px; margin-bottom:16px;">
       <div class="report-row" data-tag="ph"><span>Avg. soil pH (3 zones)</span><span class="v">6.1</span></div>
       <div class="report-row" data-tag="rain"><span>Rainfall recorded</span><span class="v">86 mm</span></div>
       <div class="report-row" data-tag="irrigation"><span>Irrigation cycles run</span><span class="v">14 (2 skipped — rain)</span></div>
@@ -504,11 +507,18 @@ function go(s){
 }
 
 const strings = {
-  en:{date:'Tue 29 Sep', place:'Kiambu Plot', lastwater:'Last watered', fields:'Your fields', rec:"Today's note"},
-  sw:{date:'Jumanne 29 Sep', place:'Shamba la Kiambu', lastwater:'Ilinyunyiziwa mara ya mwisho', fields:'Mashamba yako', rec:'Ujumbe wa leo'}
+  en:{place:'Kiambu Plot', lastwater:'Last watered', fields:'Your fields', rec:"Today's note"},
+  sw:{place:'Shamba la Kiambu', lastwater:'Ilinyunyiziwa mara ya mwisho', fields:'Mashamba yako', rec:'Ujumbe wa leo'}
 };
 
 let currentLang='en', rainSoon=false, weather=null;
+function paintDate(){
+  try{ document.getElementById('lbl-date').textContent =
+    new Date().toLocaleDateString(currentLang==='sw'?'sw-KE':'en-KE',{weekday:'short',day:'numeric',month:'short'}); }catch(e){}
+}
+paintDate();
+// Escape anything that did not come from our own code before putting it in innerHTML
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function loadWeather(id){
   const f = farms[id];
@@ -568,7 +578,7 @@ function setLang(l, btn){
   btn.classList.add('active');
   currentLang = l;
   const s = strings[l];
-  document.getElementById('lbl-date').textContent = s.date;
+  paintDate();
   document.getElementById('lbl-lastwater').textContent = s.lastwater;
   document.getElementById('lbl-fields').textContent = s.fields;
   document.getElementById('lbl-rec').textContent = s.rec;
@@ -582,7 +592,7 @@ loadWeather('kiambu');
 let moisture=62, battery=82, simOn=true, tick=0, irrigating=false, irrigTicksLeft=0;
 function paintRing(){
   document.getElementById('ring').style.background =
-    `conic-gradient(var(--leaf) 0turn ${(moisture/100).toFixed(2)}turn, #4a3b28 ${(moisture/100).toFixed(2)}turn 1turn)`;
+    `conic-gradient(var(--leaf) 0turn ${(moisture/100).toFixed(2)}turn, #2F5A3E ${(moisture/100).toFixed(2)}turn 1turn)`;
   document.getElementById('moisture-val').textContent = Math.round(moisture)+'%';
   document.getElementById('battery-fill').style.width = battery+'%';
   document.getElementById('battery-val').textContent = Math.round(battery)+'%';
@@ -669,6 +679,18 @@ function checkTank(){
 }
 
 /* ---- AI leaf doctor & features extension ---- */
+
+/* Explain WHY a call to a Netlify function failed instead of blaming the internet */
+async function apiFail(res){
+  let msg = '';
+  try{ msg = (await res.json()).error || ''; }catch(_){}
+  if(res.status === 404) return 'The server functions are not running. Open the deployed Netlify site (or run "netlify dev"), not the plain HTML file.';
+  if(/API_KEY is not set/i.test(msg)) return 'Server setup missing: ' + msg.replace(/ in Netlify.*$/i,'') + '. Add it in Netlify > Site settings > Environment variables, then redeploy.';
+  if(/API key not valid|API_KEY_INVALID|\b40[13]\b/i.test(msg)) return 'The Gemini API key was rejected. Check that GEMINI_API_KEY is correct.';
+  if(/\b429\b|quota/i.test(msg)) return 'AI usage limit reached. Wait a minute and try again.';
+  return msg ? msg.slice(0,140) : 'Server error (' + res.status + ')';
+}
+
 function resizeImage(file, max=1024){
   return new Promise((resolve, reject)=>{
     const img = new Image();
@@ -701,7 +723,7 @@ async function diagnose(file){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ image: img.base64 })
     });
-    if(!res.ok) throw new Error('Server error');
+    if(!res.ok) throw new Error(await apiFail(res));
     const d = await res.json();
     el('scan-conf').textContent = d.confidence + '% match';
     el('scan-title').textContent = d.problem;
@@ -718,7 +740,9 @@ async function diagnose(file){
   }catch(e){
     el('scan-conf').textContent = 'Could not analyse';
     el('scan-title').textContent = 'Try again';
-    el('scan-desc').textContent = 'Check your internet connection and take a clearer, well-lit photo of one leaf.';
+    el('scan-desc').textContent = (e instanceof TypeError)
+      ? 'No internet connection. Connect and try again.'
+      : (e.message || 'Take a clearer, well-lit photo of one leaf.');
     el('scan-hint').textContent = 'Something went wrong';
   }
 }
@@ -849,7 +873,7 @@ function renderHistory(){
   const listEl = document.getElementById('scan-history-list');
   if(!listEl) return;
   const h = store.get('scans', []);
-  listEl.innerHTML = h.length ? h.map(s=>`<div class="report-row"><span>${s.problem} · ${s.crop}<br><small style="opacity:.7">${s.farm} · ${new Date(s.t).toLocaleDateString()}</small></span><span class="v">${s.conf}%</span></div>`).join('')
+  listEl.innerHTML = h.length ? h.map(s=>`<div class="report-row"><span>${esc(s.problem)} · ${esc(s.crop)}<br><small style="opacity:.7">${esc(s.farm)} · ${new Date(s.t).toLocaleDateString()}</small></span><span class="v">${esc(s.conf)}%</span></div>`).join('')
     : '<div style="font-size:12px;color:var(--line)">No scans yet.</div>';
 }
 function shareScan(){
@@ -861,7 +885,7 @@ function shareScan(){
 /* ---- AI farm assistant ---- */
 function bubble(role, text){
   const d = document.createElement('div');
-  d.style.cssText = `max-width:85%;padding:9px 12px;border-radius:14px;font-size:12.5px;line-height:1.5;margin-bottom:8px;white-space:pre-wrap;${role==='user'?'margin-left:auto;background:var(--leaf);color:var(--soil);':'background:#EDE6D6;'}`;
+  d.style.cssText = `max-width:85%;padding:9px 12px;border-radius:14px;font-size:12.5px;line-height:1.5;margin-bottom:8px;white-space:pre-wrap;${role==='user'?'margin-left:auto;background:var(--leaf);color:var(--soil);':'background:#E3ECD6;'}`;
   d.textContent = text; document.getElementById('chat-log').append(d); document.getElementById('chat-log').scrollTop = 1e6; return d;
 }
 async function sendChat(text){
@@ -878,10 +902,10 @@ async function sendChat(text){
         weather: weather ? `${weather.temp}°C, ` + (weather.hoursAway===-1 ? 'no rain in 6h' : `rain in ~${weather.hoursAway}h`) : 'unknown',
         date: new Date().toDateString(), lat: f.lat, lon: f.lon } })
     });
-    if(!res.ok) throw 0;
+    if(!res.ok) throw new Error(await apiFail(res));
     const { reply } = await res.json();
     wait.textContent = reply; chatHist.push({role:'model', text:reply});
-  }catch(e){ wait.textContent = 'Could not reach the assistant. Check your connection and try again.'; }
+  }catch(e){ wait.textContent = (e instanceof TypeError) ? 'No internet connection. Connect and try again.' : (e.message || 'The assistant is unavailable right now.'); chatHist.pop(); }
 }
 
 /* ---- Injected UI initialization ---- */
@@ -938,6 +962,8 @@ async function sendChat(text){
   <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
   <script src="live.js"></script>
   <script src="tour.js"></script>
+  <script src="farmplus.js"></script>
+  <script>if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
 
 </body>
 </html>

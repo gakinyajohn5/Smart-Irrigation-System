@@ -11,7 +11,7 @@
   c.on('connect', function () { c.subscribe([S, E]); });
   c.on('message', function (topic, buf) {
     var d; try { d = JSON.parse(buf.toString()); } catch (e) { return; }
-    if (topic === E) { pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', d.msg, 'Live from digital twin'); return; }
+    if (topic === E) { pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', String(d.msg == null ? '' : d.msg).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }), 'Live from digital twin'); return; }
     var z = d.zones && d.zones[ZONE]; if (!z) return;
     lastMsg = Date.now(); if (!linked) { linked = true; badge(); }
     simOn = false;                                               // stop the app's random simulation
