@@ -173,7 +173,7 @@ $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97
 
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
-const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? true : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
+const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? z.m < 90 : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
@@ -185,6 +185,7 @@ function toggleAuto() { S.auto = !S.auto; log('SYS', 'sun', S.auto ? 'day/night 
 function skipTo(h) { S.clock = h; S.auto = true; tick(true); }
 function toggleFault(k) { const f = k === 'panel' ? 'panelFault' : 'battFault'; S[f] = !S[f]; log('SYS', 'fault', `${k} fault ${S[f] ? 'injected' : 'cleared'}`, '#ff5d73'); tick(true); }
 function handleCmd(c) {
+  if (!c || typeof c !== 'object') return;
   const i = +c.zone, z = S.zones[i]; if (!z) return;
   if (c.type === 'irrigate') {
     log('SUB', 'farm/cmd/irrigate', JSON.stringify(c), '#ffc857'); fly('#ffc857', true);
@@ -202,7 +203,7 @@ function checkFaults(Wx, W, n, instant) {
   if (S.sun >= 40 && W < Wx * .5) f.push('Solar panel output low: dirty, shaded or disconnected');
   if (!instant) {
     const a = S.batt - (S._pb ?? S.batt); S._pb = S.batt;
-    S._d = (S._d || []).concat((Wx * .0025 - n * .12 - .01) - a).slice(-12);
+    S._d = (S._d || []).concat((W * .0025 - n * .12 - .01) - a).slice(-12);
     if (S._d.length === 12 && S._d.reduce((x, y) => x + y, 0) > .6 && S.batt > .5 && S.batt < 99) f.push('Battery losing charge faster than expected: possible battery fault');
   } else if ((S.faults || []).some(m => m.startsWith('Battery losing'))) f.push('Battery losing charge faster than expected: possible battery fault');
   if (S.tank < 15) f.push('Tank critical');
@@ -257,6 +258,7 @@ function tick(instant) {
   if (!instant && S.auto) { S.clock = (S.clock + .05) % 24; S.sun = Math.max(0, Math.round(100 * Math.sin(Math.PI * (S.clock - 6) / 12))); }   // a full day = 4 minutes
   const V = S.sun ? 12.5 + 7 * S.sun / 100 : 0, I = 6 * S.sun / 100, Wx = V * I, W = Wx * (S.panelFault ? .2 : 1); let n = 0;
   S.zones.forEach((z, i) => {
+    if (z.force && z.m >= 90) { z.force = 0; notify(`Zone ${i+1} irrigation stopped: soil saturated (${Math.round(z.m)}%)`, 'info'); }
     if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
     const p = pumping(z);
     if (!instant) {

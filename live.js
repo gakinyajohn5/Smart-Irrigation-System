@@ -4,7 +4,7 @@
    - If the twin goes quiet for 8 s, the app keeps going from the last values with its own simulation. */
 (function () {
   var ROOM = 'gakinya-rl-8h2q9x4m';           // must match twin.html
-  var ZONE = 1;                                // twin zone shown on the main ring: 0 Greenhouses, 1 Open Field, 2 Orchard
+  var ZONE = 0;                                // twin zone shown on the main ring (labelled Zone A): 0 Greenhouses, 1 Open Field, 2 Orchard
   var FARM = 'kiambu';                         // twin zones 0..2 drive this farm's Zone A..C
   var S = 'rootline/' + ROOM + '/state', E = 'rootline/' + ROOM + '/events', KEY = 'rl-last-state';
   var CMD = 'rootline/' + ROOM + '/cmd';
@@ -14,11 +14,26 @@
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function $(id) { return document.getElementById(id); }
 
+  // MQTT data is untrusted (public broker): coerce every field to a safe type and range before use
+  function num(v, lo, hi, def) { v = +v; return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; }
+  function clean(d) {
+    if (!d || typeof d !== 'object' || !Array.isArray(d.zones) || d.zones.length < 3) return null;
+    return {
+      ts: num(d.ts, 0, 8.64e15, 0), sun: num(d.sun, 0, 100, 0), tank: num(d.tank, 0, 100, 0), batt: num(d.batt, 0, 100, 0),
+      master: ['auto', 'on', 'off'].indexOf(d.master) >= 0 ? d.master : 'auto', rain: !!d.rain, clock: num(d.clock, 0, 24, 0), auto: !!d.auto,
+      solar: num(d.solar, 0, 1000, 0), faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
+      zones: d.zones.slice(0, 3).map(function (z) {
+        z = z || {};
+        return { m: num(z.m, 0, 100, 0), t: num(z.t, -20, 60, 20), h: Math.round(num(z.h, 0, 100, 0)), p: z.p ? 1 : 0, mode: z.mode === 'manual' ? 'manual' : 'auto', ph: num(z.ph, 3.5, 9, 6.5) };
+      })
+    };
+  }
+
   function apply(d, fromTwin) {
     var z = d && d.zones && d.zones[ZONE]; if (!z) return;
     if (fromTwin) simOn = false;                                   // twin is driving: stop the random simulation
     moisture = z.m; battery = d.batt; tank = d.tank; irrigating = !!z.p;
-    if (typeof setSimRain === 'function') setSimRain(!!d.rain);   // dashboard rain -> app rain
+    if (fromTwin && typeof setSimRain === 'function') setSimRain(!!d.rain);   // dashboard rain -> app rain
     paintRing();
     $('tank-fill').style.width = tank + '%';
     $('tank-val').textContent = Math.round(tank) + '%';
@@ -49,15 +64,17 @@
   }
 
   // 1. Remember: restore the last twin state straight away (before the network answers)
-  try { var saved = JSON.parse(localStorage.getItem(KEY)); if (saved) apply(saved, false); } catch (e) {}
+  try { var saved = clean(JSON.parse(localStorage.getItem(KEY))); if (saved) apply(saved, false); } catch (e) {}
 
   if (typeof mqtt === 'undefined') return;                         // CDN blocked: keep going from the remembered state
   var c = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', { clientId: 'app-' + Math.random().toString(16).slice(2, 8), reconnectPeriod: 2000 });
-  window.sendTwinCmd = function (o) { if (!c.connected) return false; c.publish(CMD, JSON.stringify(o)); return true; };
+  window.sendTwinCmd = function (o) { if (!c.connected || !linked) return false; /* broker up AND twin alive */ c.publish(CMD, JSON.stringify(o)); return true; };
   c.on('connect', function () { c.subscribe([S, E]); });
   c.on('message', function (topic, buf) {
     var d; try { d = JSON.parse(buf.toString()); } catch (e) { return; }
-    if (topic === E) { pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(d.msg), 'Live from digital twin'); return; }
+    if (topic === E) { if (!d || typeof d !== 'object') return; pushAlert(d.level === 'warn' ? 'warn' : 'info', d.level === 'warn' ? '\u26A0' : '\u2713', esc(String(d.msg).slice(0, 200)), 'Live from digital twin'); return; }
+    d = clean(d); if (!d) return;
+    if (!d.ts || Math.abs(Date.now() - d.ts) > 30000) { apply(d, false); return; }   // old retained message: show it as "last known", not live
     lastMsg = Date.now(); if (!linked) { linked = true; badge(); }
     apply(d, true);
   });
