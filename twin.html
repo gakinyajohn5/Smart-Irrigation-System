@@ -177,8 +177,8 @@ const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? z.
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
-function toggleValve(i) { const z = S.zones[i]; if (z.mode !== 'manual') return; if (!z.on && S.rain) { notify(`Zone ${i+1} valve locked: it is raining`); return; } if (!z.on && z.m >= 90) { notify(`Zone ${i+1} valve refused: soil already saturated (${Math.round(z.m)}%)`); return; } z.on = !z.on; tick(true); }
-function setMaster(m) { if (m === 'on' && S.rain) { notify('Pump forced ON refused: it is raining'); return; } S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
+function toggleValve(i) { const z = S.zones[i]; if (z.mode !== 'manual') return; if (!z.on && S.rain) { tell(`Zone ${i+1} valve locked: it is raining`); return; } if (!z.on && z.m >= 90) { tell(`Zone ${i+1} valve refused: soil already saturated (${Math.round(z.m)}%)`); return; } z.on = !z.on; tick(true); }
+function setMaster(m) { if (m === 'on' && S.rain) { tell('Pump forced ON refused: it is raining'); return; } S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
 function toggleRain() { S.rain = !S.rain; if (S.rain) { if (S.master === 'on') S.master = 'auto'; S.zones.forEach(z => { z.force = 0; z.on = false; }); } log('SYS', 'weather', S.rain ? 'rain started: irrigation paused, soil absorbing, tank filling' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
 function setPh(i, d) { const z = S.zones[i]; z.ph = Math.max(3.5, Math.min(9, +(z.ph + d).toFixed(1))); log('SYS', `zone${i+1}/ph`, 'soil pH set to ' + z.ph.toFixed(1), COL[i]); tick(true); }
 function toggleAuto() { S.auto = !S.auto; log('SYS', 'sun', S.auto ? 'day/night cycle ON' : 'manual sun (drag the sun)', '#ffc857'); tick(true); }
@@ -257,11 +257,10 @@ function fly(c, down) {                                   // glowing packet alon
   const r = document.createElementNS(NS, 'circle'); r.setAttribute('cx', 290); r.setAttribute('cy', 159); r.setAttribute('r', 14); r.setAttribute('fill', 'none'); r.setAttribute('stroke', c); r.setAttribute('class', 'ring');
   $('rings').appendChild(r); setTimeout(() => r.remove(), 1000);
 }
-function notify(msg, type = 'warn') {
-  pubEvent(msg, type);                                    // mirror every alert to the deployed app                      // big push-notification banner
-  const n = document.createElement('div'); n.className = 'toast ' + type; n.textContent = (type === 'warn' ? '\u26A0 ' : '\u2714 ') + msg;
-  $('toasts').prepend(n); while ($('toasts').children.length > 3) $('toasts').lastChild.remove(); setTimeout(() => n.remove(), 7000);
+function notify(msg, type = 'warn') {                      // user alerts live in the app: send them there, only log here
+  pubEvent(msg, type); log('EVT', 'app/notify', msg, type === 'warn' ? '#ff5d73' : '#8be36b');
 }
+function tell(msg) { log('SYS', 'console', msg, '#ffc857'); }   // operator-only feedback, not sent to the app
 
 /* ---------- Simulation step (500 ms, plus instantly on every drag) ---------- */
 function tick(instant) {
