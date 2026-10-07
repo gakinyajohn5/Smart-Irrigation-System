@@ -2,7 +2,7 @@ const MODELS = [
   process.env.GEMINI_MODEL,
   'gemini-2.5-flash',
   'gemini-3.6-flash',
-  'gemini-2.5-flash-lite',
+  'gemini-flash-latest',
 ].filter(Boolean);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -11,6 +11,7 @@ async function callGemini(body) {
   if (!key) throw new Error('GEMINI_API_KEY is not set in Netlify environment variables');
 
   let lastErr = 'No model available';
+  let busyErr = '';
   // Two passes: when every model is busy (503/429), wait a moment and try them all once more
   for (let pass = 0; pass < 2; pass++) {
   if (pass) await sleep(1500);
@@ -37,11 +38,12 @@ async function callGemini(body) {
     }
     lastErr = `${model}: ${res.status} ${data?.error?.message || ''}`;
     if (![404, 429, 503].includes(res.status)) throw new Error(lastErr);
-    if (res.status !== 404) busy = true;
+    if (res.status !== 404) { busy = true; busyErr = lastErr; }
   }
   if (!busy) break;
   }
-  throw new Error(lastErr);
+  // A retired-model 404 must not hide the real reason (all models busy)
+  throw new Error(busyErr || lastErr);
 }
 
 module.exports = { callGemini };

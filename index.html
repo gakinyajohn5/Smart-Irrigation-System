@@ -58,6 +58,7 @@
   .screen::-webkit-scrollbar{display:none;}
   .almanac{flex:none;}
   .screen.active{display:block;}
+  #screen-chat.active{display:flex; flex-direction:column; overflow:hidden;}
 
   /* ---- Home ---- */
   .ring-card{background:var(--soil2); color:var(--parchment); border-radius:18px; padding:18px; display:flex; align-items:center; gap:16px; margin-bottom:18px;}
@@ -948,8 +949,8 @@ async function sendChat(text){
     });
     if(!res.ok) throw new Error(await apiFail(res));
     const { reply } = await res.json();
-    wait.textContent = reply; chatHist.push({role:'model', text:reply});
-  }catch(e){ wait.textContent = (e instanceof TypeError) ? 'No internet connection. Connect and try again.' : (e.message || 'The assistant is unavailable right now.'); chatHist.pop(); }
+    wait.textContent = reply; chatHist.push({role:'model', text:reply}); return reply;
+  }catch(e){ wait.textContent = (e instanceof TypeError) ? 'No internet connection. Connect and try again.' : (e.message || 'The assistant is unavailable right now.'); chatHist.pop(); return ''; }
 }
 
 /* ---- Injected UI initialization ---- */
@@ -978,15 +979,17 @@ async function sendChat(text){
   chat.innerHTML = `
     <button class="back" onclick="go('home')">← Field</button>
     <h1 class="serif" style="margin:0 0 10px;font-size:20px;">Farm assistant</h1>
-    <div class="chips">
-      <button class="chip" onclick="sendChat('When should I plant maize here?')">When to plant?</button>
-      <button class="chip" onclick="sendChat('How do I fix acidic soil in my zones?')">Fix acidic soil</button>
-      <button class="chip" onclick="sendChat('Give me a planting calendar for the next 3 months for this farm.')">Planting calendar</button>
-      <button class="chip" onclick="sendChat('What are typical market prices for my crops in Kenya right now? Say clearly they are estimates.')">Market prices</button>
+    <div class="chips" style="flex-wrap:nowrap;overflow-x:auto;flex:none;margin-bottom:10px;scrollbar-width:none;">
+      <button class="chip" style="white-space:nowrap" onclick="sendChat('When should I plant maize here?')">When to plant?</button>
+      <button class="chip" style="white-space:nowrap" onclick="sendChat('How do I fix acidic soil in my zones?')">Fix acidic soil</button>
+      <button class="chip" style="white-space:nowrap" onclick="sendChat('Give me a planting calendar for the next 3 months for this farm.')">Planting calendar</button>
+      <button class="chip" style="white-space:nowrap" onclick="sendChat('What are typical market prices for my crops in Kenya right now? Say clearly they are estimates.')">Market prices</button>
     </div>
-    <div id="chat-log" style="height:260px;overflow-y:auto;margin-bottom:10px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <input id="chat-input" style="flex:1;border:1px solid var(--line);background:var(--paper);border-radius:20px;padding:9px 14px;font-size:13px;font-family:'Work Sans';" placeholder="Ask about your farm…">
+    <div id="chat-log" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:8px;"></div>
+    <div id="voice-status" style="flex:none;font-size:10.5px;color:var(--rust);min-height:14px;margin-bottom:4px;"></div>
+    <div style="flex:none;display:flex;gap:8px;align-items:center;padding-bottom:10px;">
+      <input id="chat-input" style="flex:1;min-width:0;border:1px solid var(--line);background:var(--paper);border-radius:20px;padding:9px 14px;font-size:13px;font-family:'Work Sans';" placeholder="Ask about your farm…">
+      <button id="mic-btn" aria-label="Voice call" onclick="toggleVoice()" style="flex:none;width:40px;height:40px;border-radius:50%;border:1.5px solid var(--line);background:var(--paper);font-size:17px;cursor:pointer;">🎤</button>
       <button class="btn" onclick="sendChat()">Send</button>
     </div>`;
   document.querySelector('nav').before(chat);
@@ -1011,6 +1014,7 @@ async function sendChat(text){
   <script src="weather.js"></script>
   <script src="smartcare.js"></script>
   <script src="menu.js"></script>
+  <script src="voice.js"></script>
   <script>if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
 
 </body>
