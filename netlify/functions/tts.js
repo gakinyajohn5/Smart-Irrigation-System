@@ -5,7 +5,7 @@ exports.handler = async function (event) {
     const { text, lang } = JSON.parse(event.body || '{}');
     if (!text) return { statusCode: 400, body: JSON.stringify({ error: 'No text' }) };
 
-    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const apiKey = (process.env.ELEVENLABS_API_KEY || '').trim();
     if (!apiKey) throw new Error('ELEVENLABS_API_KEY is not set in Netlify');
 
     // Sarah: a premade voice that free plans can use. Override in Netlify if you like.
@@ -31,7 +31,10 @@ exports.handler = async function (event) {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`ElevenLabs ${response.status}: ${detail.slice(0, 300)}`);
+      const hint = /API key ID/i.test(detail)
+        ? ` | The saved value ${apiKey.startsWith('sk_') ? 'starts with sk_ but ElevenLabs still calls it an ID' : 'does NOT start with sk_ (it starts with "' + apiKey.slice(0, 3) + '…", length ' + apiKey.length + ')'}. Paste the secret key that starts with sk_, save, then redeploy.`
+        : '';
+      throw new Error(`ElevenLabs ${response.status}: ${detail.slice(0, 200)}${hint}`);
     }
 
     const audioBuffer = await response.arrayBuffer();
