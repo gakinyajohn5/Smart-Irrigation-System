@@ -79,6 +79,7 @@
     var f = d.faults || [], fe = $('dt-faults');
     fe.textContent = f.length ? '\u26A0 ' + f.join(' \u2022 ') : '\u2713 No faults'; fe.style.color = f.length ? 'var(--rust)' : 'var(--leaf-dk)';
     var pump = d.zones.some(function (z) { return z.p; });
+    scr.querySelectorAll('[data-irr]').forEach(function (b) { b.disabled = !!d.rain; b.style.opacity = d.rain ? .45 : 1; b.textContent = d.rain ? '\uD83C\uDF27 Blocked: raining' : '\uD83D\uDCA7 Irrigate 15 s'; });
     $('dt-sys').innerHTML = row('Time of day', d.clock != null ? hhmm(d.clock) + (d.sun === 0 ? ' (night)' : '') : '--') + row('Sunlight', d.sun + '%') +
       row('Solar power', (d.solar != null ? d.solar : '--') + ' W') + row('Battery', Math.round(d.batt) + '%') + row('Water tank', Math.round(d.tank) + '%') +
       row('Pump', pump ? 'RUNNING' : 'Idle') + row('Rain', d.rain ? 'Simulated rain' : 'None');
@@ -96,6 +97,10 @@
     else window.irrigateZone(+b.dataset.irr);
   });
   window.irrigateZone = function (i) {
+    if (window.__twinLast && window.__twinLast.rain) {
+      var m = 'Irrigation blocked: it is raining at the farm.';
+      pushAlert('warn', '\uD83C\uDF27', m, 'Wait until the rain stops'); if ($('dt-msg')) $('dt-msg').textContent = m; return;
+    }
     var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'irrigate', zone: i, seconds: 15 }), msg;
     if (ok) msg = 'Irrigation command sent to ' + zn(i) + ' (15 s). The dashboard may refuse it if the tank is empty or power is out.';
     else { msg = 'Dashboard not connected: irrigating in the app simulation.'; if (typeof simOn !== 'undefined' && simOn && !irrigating) { irrigating = true; irrigTicksLeft = 4; } }

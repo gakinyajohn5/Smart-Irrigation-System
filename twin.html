@@ -173,13 +173,13 @@ $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97
 
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
-const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : (z.force || 0) > Date.now() ? true : S.rain ? false : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
+const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? true : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
-function toggleValve(i) { const z = S.zones[i]; if (z.mode === 'manual') { z.on = !z.on; tick(true); } }
-function setMaster(m) { S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
-function toggleRain() { S.rain = !S.rain; log('SYS', 'weather', S.rain ? 'rain started: irrigation paused, soil absorbing, tank filling' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
+function toggleValve(i) { const z = S.zones[i]; if (z.mode !== 'manual') return; if (!z.on && S.rain) { notify(`Zone ${i+1} valve locked: it is raining`); return; } if (!z.on && z.m >= 90) { notify(`Zone ${i+1} valve refused: soil already saturated (${Math.round(z.m)}%)`); return; } z.on = !z.on; tick(true); }
+function setMaster(m) { if (m === 'on' && S.rain) { notify('Pump forced ON refused: it is raining'); return; } S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
+function toggleRain() { S.rain = !S.rain; if (S.rain) { if (S.master === 'on') S.master = 'auto'; S.zones.forEach(z => { z.force = 0; z.on = false; }); } log('SYS', 'weather', S.rain ? 'rain started: irrigation paused, soil absorbing, tank filling' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
 function setPh(i, d) { const z = S.zones[i]; z.ph = Math.max(3.5, Math.min(9, +(z.ph + d).toFixed(1))); log('SYS', `zone${i+1}/ph`, 'soil pH set to ' + z.ph.toFixed(1), COL[i]); tick(true); }
 function toggleAuto() { S.auto = !S.auto; log('SYS', 'sun', S.auto ? 'day/night cycle ON' : 'manual sun (drag the sun)', '#ffc857'); tick(true); }
 function skipTo(h) { S.clock = h; S.auto = true; tick(true); }
@@ -188,6 +188,8 @@ function handleCmd(c) {
   const i = +c.zone, z = S.zones[i]; if (!z) return;
   if (c.type === 'irrigate') {
     log('SUB', 'farm/cmd/irrigate', JSON.stringify(c), '#ffc857'); fly('#ffc857', true);
+    if (S.rain) { notify(`App irrigation refused for Zone ${i+1}: it is raining`); return; }
+    if (z.m >= 90) { notify(`App irrigation refused for Zone ${i+1}: soil already saturated (${Math.round(z.m)}%)`); return; }
     if (S.master === 'off') { notify('App irrigation refused: master switch is OFF'); return; }
     if (!canRun()) { notify('App irrigation refused: ' + (S.tank <= .5 ? 'tank empty' : 'battery dead')); return; }
     z.force = Date.now() + Math.min(60, Math.max(5, +c.seconds || 15)) * 1000;
@@ -286,7 +288,7 @@ function render(V, I, W, n) {
   const h = S.batt <= 5 ? ['PUMP LOCKOUT', '#ff5d73'] : S.batt < 20 ? ['CRITICAL', '#ff5d73'] : S.sun < 15 ? ['LOW SUN', '#ffc857'] : ['NOMINAL', '#8be36b'];
   $('health').textContent = h[0]; $('health').style.color = h[1];
   const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
-  $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
+  $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.rain ? 'RAIN LOCKOUT' : S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
   $('rainG').setAttribute('opacity', S.rain ? 1 : 0); $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
   const hh = Math.floor(S.clock), mm = Math.floor((S.clock % 1) * 60);
   $('sunBtn').textContent = (S.auto ? 'Sun: AUTO ' : 'Sun: MANUAL ') + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + (S.sun === 0 ? ' (night)' : '');
