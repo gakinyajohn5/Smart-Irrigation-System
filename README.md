@@ -13,6 +13,9 @@ A progressive web application (PWA) designed for farmers in East Africa to monit
 * **Bilingual Support:** Full seamless interface toggle between **English** and **Swahili (Kiswahili)**.
 * **Smart Ledger & Cost Calculator:** Calculate local amendment costs (like agricultural lime), track harvest timelines, download custom CSV reports, and log water/money savings.
 * **AI Farm Assistant:** Integrated chat assistant powered by Gemini to answer region-specific agronomy questions.
+* **Morning or Evening Irrigation:** Choose when automatic irrigation runs (morning 05:00-09:00 or evening 17:00-19:00) from the Smart care screen or the dashboard. Dry zones wait for the window; very dry soil is watered at any time. Dragging the sun on the dashboard moves the clock, so irrigation starts and stops with the time of day.
+* **Crop-Aware Watering:** Set the crop in each zone. Each crop has its own start level, stop level, weekly water need and pH range (`crops.js`). The Irrigate button warns and explains, based on the plant, when the soil is already wet enough, when it is the wrong time of day, or when heavy rain is coming.
+* **Soil pH Control:** The app knows each zone's pH and the crop's range, tells you whether to add lime or sulfur and roughly how much, and the Apply buttons move the pH toward the crop's range without overshooting. An "Ask AI" button explains the zone in plain language (needs `GEMINI_API_KEY`; the built-in crop rules work without it).
 
 ## 🛠️ Tech Stack
 

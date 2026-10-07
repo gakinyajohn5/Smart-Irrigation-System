@@ -27,7 +27,7 @@
     h.textContent = warn ? '\u26A0 Farm alert' : '\uD83D\uDCA7 Farm update'; p.textContent = msg; c.appendChild(h); c.appendChild(p); c.appendChild(bs);
     function btn(t, cls, fn) { var b = document.createElement('button'); b.textContent = t; if (cls) b.className = cls; b.onclick = function () { if (fn) fn(); c.remove(); }; bs.appendChild(b); }
     if (x && Number.isInteger(x.stop) && x.stop >= 0 && x.stop < 3) { var jn; try { jn = farms[FARM].jars[x.stop].name; } catch (e) {} btn('\u25A0 Stop ' + (jn || 'Zone ' + (x.stop + 1)), '', function () { window.sendTwinCmd({ type: 'stop', zone: x.stop }); }); }
-    if (x && x.ask) { btn('\uD83D\uDCA7 Irrigate tonight', '', function () { window.sendTwinCmd({ type: 'decision', irrigate: true }); }); btn('Skip: rain is coming', 'g', function () { window.sendTwinCmd({ type: 'decision', irrigate: false }); }); }
+    if (x && x.ask) { var mo = x.sched !== 'evening'; btn(mo ? '\uD83D\uDCA7 Irrigate anyway' : '\uD83D\uDCA7 Irrigate tonight', '', function () { window.sendTwinCmd({ type: 'decision', irrigate: true }); }); btn(mo ? 'Skip tomorrow: rain is coming' : 'Skip: rain is coming', 'g', function () { window.sendTwinCmd({ type: 'decision', irrigate: false }); }); }
     btn('OK', 'g');
     w.prepend(c); while (w.children.length > 3) w.lastChild.remove();
     if (!warn) setTimeout(function () { c.remove(); }, 10000);
@@ -42,10 +42,10 @@
     return {
       ts: num(d.ts, 0, 8.64e15, 0), sun: num(d.sun, 0, 100, 0), tank: num(d.tank, 0, 100, 0), batt: num(d.batt, 0, 100, 0),
       master: ['auto', 'on', 'off'].indexOf(d.master) >= 0 ? d.master : 'auto', rain: !!d.rain, clock: num(d.clock, 0, 24, 0), auto: !!d.auto,
-      solar: num(d.solar, 0, 1000, 0), temp: num(d.temp, -10, 60, 26), rp0: num(d.rp0, 0, 100, 0), rp1: num(d.rp1, 0, 100, 0), pause: num(d.pause, 0, 168, 0), skip: !!d.skip, heat: !!d.heat, ask: !!d.ask, faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
+      solar: num(d.solar, 0, 1000, 0), temp: num(d.temp, -10, 60, 26), rp0: num(d.rp0, 0, 100, 0), rp1: num(d.rp1, 0, 100, 0), pause: num(d.pause, 0, 168, 0), sched: d.sched === 'evening' ? 'evening' : 'morning', win: Array.isArray(d.win) ? [num(d.win[0], 0, 24, 5), num(d.win[1], 0, 24, 9)] : null, skip: !!d.skip, heat: !!d.heat, ask: !!d.ask, faults: Array.isArray(d.faults) ? d.faults.slice(0, 10).map(function (f) { return String(f).slice(0, 120); }) : [],
       zones: d.zones.slice(0, 3).map(function (z) {
         z = z || {};
-        return { m: num(z.m, 0, 100, 0), t: num(z.t, -20, 60, 20), h: Math.round(num(z.h, 0, 100, 0)), p: z.p ? 1 : 0, mode: z.mode === 'manual' ? 'manual' : 'auto', ph: num(z.ph, 3.5, 9, 6.5) };
+        return { m: num(z.m, 0, 100, 0), t: num(z.t, -20, 60, 20), h: Math.round(num(z.h, 0, 100, 0)), p: z.p ? 1 : 0, mode: z.mode === 'manual' ? 'manual' : 'auto', ph: num(z.ph, 3.5, 9, 6.5), crop: String(z.crop == null ? '' : z.crop).replace(/[^A-Za-z0-9 \-]/g, '').slice(0, 24), wait: z.wait ? 1 : 0 };
       })
     };
   }
@@ -64,7 +64,8 @@
     d.zones.forEach(function (tz, i) {
       if (!f.jars[i]) return;
       f.jars[i].fill = Math.round(tz.m);
-      var acid = tz.ph != null && tz.ph < 5.6;
+      if (tz.crop && window.cropOf) { var nm = cropOf(tz.crop).name; if (f.jars[i].sub !== nm) { f.jars[i].sub = nm; if (curFarm === FARM && jars[i] && jars[i].querySelector('.jar-sub')) jars[i].querySelector('.jar-sub').textContent = nm; } }
+      var cr = window.cropOf ? cropOf(tz.crop || f.jars[i].sub) : null, acid = tz.ph != null && (cr ? (tz.ph < cr.ph[0] || tz.ph > cr.ph[1]) : tz.ph < 5.6);   // out of range for THIS crop
       if (tz.ph != null) { f.jars[i].ph = tz.ph.toFixed(1); f.jars[i].color = acid ? 'var(--rust)' : ''; }
       if (curFarm === FARM && jars[i]) {
         var fill = jars[i].querySelector('.jar-fill'), ph = jars[i].querySelector('.jar-ph');
@@ -76,7 +77,7 @@
     var zb = d.zones[1];
     if (zb) {
       var gm = document.querySelector('#gauge-moisture b'), gt = document.querySelector('#gauge-temp b');
-      if (zb.ph != null) { var gp = document.querySelector('#gauge-ph b'); if (gp) gp.textContent = zb.ph.toFixed(1); var gpe = $('gauge-ph'); if (gpe) gpe.classList.toggle('warn', zb.ph < 5.6); }
+      if (zb.ph != null) { var gp = document.querySelector('#gauge-ph b'); if (gp) gp.textContent = zb.ph.toFixed(1); var gpe = $('gauge-ph'), cb = window.cropOf ? cropOf(zb.crop || (f.jars[1] && f.jars[1].sub)) : null; if (gpe) gpe.classList.toggle('warn', cb ? (zb.ph < cb.ph[0] || zb.ph > cb.ph[1]) : zb.ph < 5.6); }
       if (gm) gm.textContent = Math.round(zb.m) + '%'; if (gt) gt.textContent = Math.round(zb.t) + '\u00B0C';
     }
     window.__twinLast = d;

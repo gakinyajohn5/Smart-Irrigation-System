@@ -97,12 +97,13 @@
     if (b.dataset.stop != null) { var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'stop', zone: +b.dataset.stop }); $('dt-msg').textContent = ok ? 'Stop command sent.' : 'Not connected to the dashboard.'; }
     else window.irrigateZone(+b.dataset.irr);
   });
-  window.irrigateZone = function (i) {
+  window.irrigateZone = function (i, opt) {
     if (window.__twinLast && window.__twinLast.rain) {
       var m = 'Irrigation blocked: it is raining at the farm.';
       pushAlert('warn', '\uD83C\uDF27', m, 'Wait until the rain stops'); if ($('dt-msg')) $('dt-msg').textContent = m; return;
     }
-    var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'irrigate', zone: i, seconds: 15 }), msg;
+    if (window.careGuard && !(opt && opt.confirmed)) { window.careGuard(i, function () { window.irrigateZone(i, { confirmed: true }); }); return; }   // plant-aware warning first
+    var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'irrigate', zone: i, seconds: 15, confirm: !!(opt && opt.confirmed) }), msg;
     if (ok) msg = 'Irrigation command sent to ' + zn(i) + ' (15 s). The dashboard may refuse it if the tank is empty or power is out.';
     else { msg = 'Dashboard not connected: irrigating in the app simulation.'; if (typeof simOn !== 'undefined' && simOn && !irrigating) { irrigating = true; irrigTicksLeft = 4; } }
     pushAlert('info', '\uD83D\uDCA7', 'Irrigation requested: ' + zn(i), ok ? 'Sent to the dashboard' : 'App simulation');

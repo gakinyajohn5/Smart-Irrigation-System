@@ -29,7 +29,7 @@
     pz();
   });
   var _iz = window.irrigateZone;                              // manual "Irrigate 15 s" respects the pause too
-  if (_iz) window.irrigateZone = function (i) { if (paused()) { var m = 'Irrigation is paused (' + left() + ' left). Resume it first.'; pushAlert('warn', '\u23F8', m, 'Do not irrigate'); if ($('dt-msg')) $('dt-msg').textContent = m; return; } _iz(i); };
+  if (_iz) window.irrigateZone = function (i, opt) { if (paused()) { var m = 'Irrigation is paused (' + left() + ' left). Resume it first.'; pushAlert('warn', '\u23F8', m, 'Do not irrigate'); if ($('dt-msg')) $('dt-msg').textContent = m; return; } _iz(i, opt); };
   $('wx-strip').insertAdjacentHTML('afterend', '<div class="gauge" id="ir-card" style="display:none;margin-bottom:12px;text-align:left;"><b id="ir-t"></b><div id="ir-b" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"></div><div id="ir-m" style="font-size:12px;min-height:14px;margin-top:4px;"></div></div>');
   function ir() {                                            // "Irrigating now" card with a Stop button per running zone
     var run = [], f = farms[curFarm] || { jars: [] };
@@ -52,17 +52,18 @@
     }
     return d;
   }
-  function plan(x) { return x.rain > 75 ? 'Skip: rain' : x.hi >= 30 ? 'Short, cool hours' : 'Normal'; }
+  function plan(x) { return x.rain > 75 ? 'Skip: rain' : x.hi >= 30 ? 'Short, cool hours' : (live && tw && tw.sched === 'evening' ? 'Evening' : 'Early morning'); }
   function paint() {
     ir(); var d = eff(), t = d[0]; if (!t) return;
     var rain = t.rain, sun = live && tw ? tw.sun : null;
     $('wx-main').textContent = (t.icon || icon(t.code)) + ' ' + t.hi + '\u00B0C \u00B7 ' + (sun != null ? 'Sun ' + sun + '% \u00B7 ' : '') + 'Rain ' + rain + '%';
-    var msg = paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? 'Rain likely today: irrigation skipped. It rechecks at ' + tw.irrH + ':00 and irrigates if it stays dry.'
+    var msg = paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? (tw.sched === 'evening' ? 'Rain likely today: tonight\'s irrigation waits and runs only if it stays dry.' : 'Rain likely today: this morning\'s irrigation is skipped. It resumes the next morning if no rain comes.')
       : live && tw && tw.heat ? 'Strong sun: irrigation is held to cooler hours and cycles are shorter.'
       : !live && rain > 75 ? 'Rain likely today: irrigation will be skipped.' : 'Irrigation runs normally. Tap for the week.';
     $('wx-sub').textContent = msg;
     var ask = live && tw && tw.ask; $('wx-ask').style.display = ask ? 'block' : 'none';
-    if (ask) { if (!askShown) { askShown = true; $('wx-q').textContent = 'Rain is likely tomorrow (' + tw.rp1 + '%). Irrigate tonight?'; pushAlert('warn', '\uD83C\uDF27', 'Rain likely tomorrow (' + tw.rp1 + '%): irrigate tonight?', 'Answer on the Field screen'); } } else askShown = false;
+    if (ask) { var mo = tw.sched !== 'evening', b1 = document.querySelector('#wx-ask [data-ans="1"]'), b0 = document.querySelector('#wx-ask [data-ans="0"]'); if (b1) b1.textContent = mo ? '\uD83D\uDCA7 Irrigate anyway' : '\uD83D\uDCA7 Irrigate tonight'; if (b0) b0.textContent = mo ? 'Skip tomorrow, rain is coming' : 'Skip, rain is coming'; }
+    if (ask) { if (!askShown) { askShown = true; $('wx-q').textContent = tw.sched === 'evening' ? 'Rain is likely tomorrow (' + tw.rp1 + '%). Irrigate tonight?' : 'Rain is likely tomorrow (' + tw.rp1 + '%). Skip tomorrow morning\'s irrigation?'; pushAlert('warn', '\uD83C\uDF27', (tw.sched === 'evening' ? 'Rain likely tomorrow (' + tw.rp1 + '%): irrigate tonight?' : 'Rain likely tomorrow (' + tw.rp1 + '%): skip tomorrow morning?'), 'Answer on the Field screen'); } } else askShown = false;
     pz();
     $('wk-note').textContent = live ? 'Today and tomorrow follow the digital twin; the rest is the live forecast.' : 'Live forecast for this farm.';
     $('wk-days').innerHTML = d.map(function (x, i) {
