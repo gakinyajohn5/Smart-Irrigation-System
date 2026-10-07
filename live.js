@@ -7,6 +7,8 @@
   var ZONE = 1;                                // twin zone shown on the main ring: 0 Greenhouses, 1 Open Field, 2 Orchard
   var FARM = 'kiambu';                         // twin zones 0..2 drive this farm's Zone A..C
   var S = 'rootline/' + ROOM + '/state', E = 'rootline/' + ROOM + '/events', KEY = 'rl-last-state';
+  var CMD = 'rootline/' + ROOM + '/cmd';
+  window.sendTwinCmd = function () { return false; };            // replaced once the MQTT link exists
   var linked = false, lastMsg = 0, btn = document.getElementById('live-toggle');
   function badge() { if (btn) btn.innerHTML = '<span class="dot"></span>' + (linked ? 'LIVE \u00B7 TWIN' : 'LIVE'); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
@@ -26,14 +28,23 @@
     d.zones.forEach(function (tz, i) {
       if (!f.jars[i]) return;
       f.jars[i].fill = Math.round(tz.m);
-      if (curFarm === FARM && jars[i]) { var fill = jars[i].querySelector('.jar-fill'); if (fill) fill.style.height = Math.round(tz.m) + '%'; }
+      var acid = tz.ph != null && tz.ph < 5.6;
+      if (tz.ph != null) { f.jars[i].ph = tz.ph.toFixed(1); f.jars[i].color = acid ? 'var(--rust)' : ''; }
+      if (curFarm === FARM && jars[i]) {
+        var fill = jars[i].querySelector('.jar-fill'), ph = jars[i].querySelector('.jar-ph');
+        if (fill) { fill.style.height = Math.round(tz.m) + '%'; fill.style.background = acid ? 'var(--rust)' : ''; }
+        if (ph && tz.ph != null) { ph.textContent = 'pH ' + tz.ph.toFixed(1); ph.style.color = acid ? '#8a3a00' : ''; }
+      }
     });
     // zone detail screen shows twin zone 2 (Open Field = Zone B)
     var zb = d.zones[1];
     if (zb) {
       var gm = document.querySelector('#gauge-moisture b'), gt = document.querySelector('#gauge-temp b');
+      if (zb.ph != null) { var gp = document.querySelector('#gauge-ph b'); if (gp) gp.textContent = zb.ph.toFixed(1); var gpe = $('gauge-ph'); if (gpe) gpe.classList.toggle('warn', zb.ph < 5.6); }
       if (gm) gm.textContent = Math.round(zb.m) + '%'; if (gt) gt.textContent = Math.round(zb.t) + '\u00B0C';
     }
+    window.__twinLast = d;
+    window.dispatchEvent(new CustomEvent('twin', { detail: { d: d, live: !!fromTwin } }));
     try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
   }
 
@@ -42,6 +53,7 @@
 
   if (typeof mqtt === 'undefined') return;                         // CDN blocked: keep going from the remembered state
   var c = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', { clientId: 'app-' + Math.random().toString(16).slice(2, 8), reconnectPeriod: 2000 });
+  window.sendTwinCmd = function (o) { if (!c.connected) return false; c.publish(CMD, JSON.stringify(o)); return true; };
   c.on('connect', function () { c.subscribe([S, E]); });
   c.on('message', function (topic, buf) {
     var d; try { d = JSON.parse(buf.toString()); } catch (e) { return; }

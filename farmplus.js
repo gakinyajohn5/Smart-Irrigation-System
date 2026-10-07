@@ -56,3 +56,53 @@
   if (typeof SW !== 'undefined') { SW['Smart forecast'] = 'Utabiri wa busara'; SW['Crop calendar'] = 'Kalenda ya mazao'; }
   forecast(); calendar(); setInterval(forecast, 3000);
 })();
+
+/* ---- Full data screen + irrigate (talks to the dashboard over MQTT; falls back to the app simulation) ---- */
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var nav = document.querySelector('nav'); if (!nav) return;
+  var zn = function (i) { var j = farms.kiambu.jars[i]; return j ? j.name + ' \u00B7 ' + j.sub : 'Zone ' + (i + 1); };
+  var scr = document.createElement('div'); scr.className = 'screen'; scr.id = 'screen-data';
+  scr.innerHTML = '<button class="back" onclick="go(\'home\')">\u2190 Field</button>' +
+    '<h1 class="serif" style="margin:0 0 6px;font-size:20px;">Full farm data</h1>' +
+    '<div id="dt-status" style="font-size:11px;margin-bottom:10px;opacity:.8;"></div>' +
+    '<div id="dt-faults" style="font-size:12px;font-weight:600;margin-bottom:12px;"></div>' +
+    '<h2 class="section">Power and water</h2><div id="dt-sys"></div>' +
+    [0, 1, 2].map(function (i) {
+      return '<h2 class="section" style="margin-top:14px;">' + zn(i) + '</h2><div id="dt-z' + i + '"></div>' +
+        '<div style="display:flex;gap:8px;margin:8px 0 4px;"><button class="btn" data-irr="' + i + '">\uD83D\uDCA7 Irrigate 15 s</button><button class="btn ghost" data-stop="' + i + '">Stop</button></div>';
+    }).join('') + '<div id="dt-msg" style="font-size:12px;color:var(--leaf-dk);min-height:16px;margin:8px 0 14px;"></div>';
+  nav.before(scr);
+  var anchor = $('rain-btn'); if (anchor) anchor.insertAdjacentHTML('beforebegin', '<button class="btn block" style="margin-bottom:10px;" onclick="go(\'data\')">\uD83D\uDCCA Full data &amp; irrigate</button>');
+  function row(k, v) { return '<div class="report-row"><span>' + k + '</span><span class="v">' + v + '</span></div>'; }
+  function hhmm(c) { return ('0' + Math.floor(c)).slice(-2) + ':' + ('0' + Math.floor((c % 1) * 60)).slice(-2); }
+  function draw(d, live) {
+    if (!d) return;
+    $('dt-status').textContent = live ? 'Live from the digital twin' : 'Last known data (dashboard not connected)';
+    var f = d.faults || [], fe = $('dt-faults');
+    fe.textContent = f.length ? '\u26A0 ' + f.join(' \u2022 ') : '\u2713 No faults'; fe.style.color = f.length ? 'var(--rust)' : 'var(--leaf-dk)';
+    var pump = d.zones.some(function (z) { return z.p; });
+    $('dt-sys').innerHTML = row('Time of day', d.clock != null ? hhmm(d.clock) + (d.sun === 0 ? ' (night)' : '') : '--') + row('Sunlight', d.sun + '%') +
+      row('Solar power', (d.solar != null ? d.solar : '--') + ' W') + row('Battery', Math.round(d.batt) + '%') + row('Water tank', Math.round(d.tank) + '%') +
+      row('Pump', pump ? 'RUNNING' : 'Idle') + row('Rain', d.rain ? 'Simulated rain' : 'None');
+    d.zones.forEach(function (z, i) {
+      if (!$('dt-z' + i)) return;
+      $('dt-z' + i).innerHTML = row('Moisture', Math.round(z.m) + '%') + row('Temperature', Math.round(z.t) + '\u00B0C') + row('Humidity', z.h + '%') +
+        row('Soil pH', z.ph != null ? z.ph.toFixed(1) : '--') + row('Valve', z.p ? 'OPEN' : 'Closed') + row('Mode', String(z.mode).toUpperCase());
+    });
+  }
+  window.addEventListener('twin', function (e) { draw(e.detail.d, e.detail.live); });
+  if (window.__twinLast) draw(window.__twinLast, false);
+  scr.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-irr],[data-stop]'); if (!b) return;
+    if (b.dataset.stop != null) { var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'stop', zone: +b.dataset.stop }); $('dt-msg').textContent = ok ? 'Stop command sent.' : 'Not connected to the dashboard.'; }
+    else window.irrigateZone(+b.dataset.irr);
+  });
+  window.irrigateZone = function (i) {
+    var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'irrigate', zone: i, seconds: 15 }), msg;
+    if (ok) msg = 'Irrigation command sent to ' + zn(i) + ' (15 s). The dashboard may refuse it if the tank is empty or power is out.';
+    else { msg = 'Dashboard not connected: irrigating in the app simulation.'; if (typeof simOn !== 'undefined' && simOn && !irrigating) { irrigating = true; irrigTicksLeft = 4; } }
+    pushAlert('info', '\uD83D\uDCA7', 'Irrigation requested: ' + zn(i), ok ? 'Sent to the dashboard' : 'App simulation');
+    if ($('dt-msg')) $('dt-msg').textContent = msg;
+  };
+})();

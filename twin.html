@@ -51,6 +51,8 @@ svg text{font-family:'IBM Plex Mono',monospace}
   </div>
   <div class="flex flex-wrap gap-2">
     <button class="btn" onclick="drought()">Dry out Zone 2</button><button class="btn" onclick="refill()">Refill tank</button><button class="btn" id="rainBtn" onclick="toggleRain()">Make it rain</button>
+    <button class="btn" id="sunBtn" onclick="toggleAuto()">Sun: AUTO</button><button class="btn" onclick="skipTo(21)">Skip to night</button><button class="btn" onclick="skipTo(8)">Skip to morning</button>
+    <button class="btn" id="pfBtn" onclick="toggleFault('panel')">Fault: dirty panel</button><button class="btn" id="bfBtn" onclick="toggleFault('batt')">Fault: weak battery</button>
     <button class="btn" id="presBtn" onclick="togglePres()">Presentation Mode</button><button class="btn" onclick="resetAll()">Reset</button>
   </div>
 </header>
@@ -125,8 +127,8 @@ svg text{font-family:'IBM Plex Mono',monospace}
 const $ = id => document.getElementById(id), NS = 'http://www.w3.org/2000/svg';
 const COL = ['#8be36b', '#5ef2d6', '#c084fc'], NAMES = ['Greenhouses', 'Open Field', 'Orchard'];
 const PX = [330, 560, 790], LOW = 30, STOP = 50, SOIL_TOP = 300, SOIL_H = 220;
-const fresh = () => ({ sun: 80, batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
-  zones: [{m:62,t:29,h:71,bt:29},{m:55,t:26,h:64,bt:26},{m:58,t:24,h:66,bt:24}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false})) });
+const fresh = () => ({ sun: 80, clock: 12, auto: true, panelFault: false, battFault: false, faults: [], batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
+  zones: [{m:62,t:29,h:71,bt:29,ph:6.4},{m:55,t:26,h:64,bt:26,ph:5.1},{m:58,t:24,h:66,bt:24,ph:6.8}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false, force:0})) });
 const KEY = 'rootline-twin-state';
 let S = fresh(), hist = [[], [], []], pkts = 0, beat = 0, lastSend = [0, 0, 0], demo = null;
 const lerp = (a, b, k) => Math.round(a + (b - a) * k), mix = (c1, c2, k) => '#' + [0, 2, 4].map(i => lerp(parseInt(c1.substr(1 + i, 2), 16), parseInt(c2.substr(1 + i, 2), 16), k).toString(16).padStart(2, '0')).join('');
@@ -151,19 +153,49 @@ $('zones').innerHTML = PX.map((x, i) => `
  <circle id="led${i}" cx="${x+176}" cy="122" r="7" fill="#8be36b"/>
  <g class="sb" id="bm${i}" onclick="toggleMode(${i})"><rect x="${x+8}" y="488" width="82" height="24" rx="12"/><text id="tm${i}" x="${x+49}" y="504" text-anchor="middle" font-size="11" fill="#fff">AUTO</text></g>
  <g class="sb" id="bv${i}" onclick="toggleValve(${i})"><rect x="${x+98}" y="488" width="84" height="24" rx="12"/><text id="tv${i}" x="${x+140}" y="504" text-anchor="middle" font-size="11" fill="#fff">VALVE OFF</text></g>`).join('');
-$('bars').innerHTML = NAMES.map((n, i) => `<div><div class="flex justify-between"><span>Zone ${i+1}</span><b id="cv${i}">0%</b></div><div class="h-2 rounded-full bg-[#05080f] overflow-hidden"><div id="cb${i}" class="h-full" style="transition:.3s"></div></div></div>`).join('')
+$('bars').innerHTML = NAMES.map((n, i) => `<div><div class="flex justify-between"><span>Zone ${i+1}</span><b id="cv${i}">0%</b></div><div class="h-2 rounded-full bg-[#05080f] overflow-hidden"><div id="cb${i}" class="h-full" style="transition:.3s"></div></div><div class="flex justify-between lbl pt-1"><span>Soil pH</span><span><button class="btn" style="padding:0 8px" onclick="setPh(${i},-0.1)">-</button> <b id="ph${i}">6.4</b> <button class="btn" style="padding:0 8px" onclick="setPh(${i},0.1)">+</button></span></div></div>`).join('')
   + `<div class="flex justify-between lbl pt-1"><span>Tank <b id="aT">85%</b></span><span>Pump <b id="aP">IDLE</b></span></div>`;
 $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97) % 1180 + 10}" cy="${(k * 53) % 230 + 8}" r="${k % 3 ? .9 : 1.5}"/>`).join('');
 
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
-const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : S.rain ? false : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
+const wants = z => S.master === 'off' ? false : S.master === 'on' ? true : (z.force || 0) > Date.now() ? true : S.rain ? false : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
 function toggleValve(i) { const z = S.zones[i]; if (z.mode === 'manual') { z.on = !z.on; tick(true); } }
 function setMaster(m) { S.master = m; log('SUB', 'farm/cmd/pump', JSON.stringify({ master: m }), '#ffc857'); fly('#ffc857', true); tick(true); }
 function toggleRain() { S.rain = !S.rain; log('SYS', 'weather', S.rain ? 'rain started (simulated): irrigation paused, soil absorbing' : 'rain stopped', '#5ef2d6'); notify(S.rain ? 'Rain started (simulated): irrigation paused' : 'Rain stopped', 'info'); tick(true); }
+function setPh(i, d) { const z = S.zones[i]; z.ph = Math.max(3.5, Math.min(9, +(z.ph + d).toFixed(1))); log('SYS', `zone${i+1}/ph`, 'soil pH set to ' + z.ph.toFixed(1), COL[i]); tick(true); }
+function toggleAuto() { S.auto = !S.auto; log('SYS', 'sun', S.auto ? 'day/night cycle ON' : 'manual sun (drag the sun)', '#ffc857'); tick(true); }
+function skipTo(h) { S.clock = h; S.auto = true; tick(true); }
+function toggleFault(k) { const f = k === 'panel' ? 'panelFault' : 'battFault'; S[f] = !S[f]; log('SYS', 'fault', `${k} fault ${S[f] ? 'injected' : 'cleared'}`, '#ff5d73'); tick(true); }
+function handleCmd(c) {
+  const i = +c.zone, z = S.zones[i]; if (!z) return;
+  if (c.type === 'irrigate') {
+    log('SUB', 'farm/cmd/irrigate', JSON.stringify(c), '#ffc857'); fly('#ffc857', true);
+    if (S.master === 'off') { notify('App irrigation refused: master switch is OFF'); return; }
+    if (!canRun()) { notify('App irrigation refused: ' + (S.tank <= .5 ? 'tank empty' : 'battery dead')); return; }
+    z.force = Date.now() + Math.min(60, Math.max(5, +c.seconds || 15)) * 1000;
+    notify(`Zone ${i+1} irrigation started from the app`, 'info'); tick(true);
+  } else if (c.type === 'stop') { z.force = 0; tick(true); }
+}
+function checkFaults(Wx, W, n, instant) {
+  const f = [], key = m => m.replace(/\d+\.\d+/g, '');
+  if (S.batt <= 5) f.push('Battery dead: pump lockout'); else if (S.batt < 20) f.push('Battery low');
+  if (S.sun >= 40 && W < Wx * .5) f.push('Solar panel output low: dirty, shaded or disconnected');
+  if (!instant) {
+    const a = S.batt - (S._pb ?? S.batt); S._pb = S.batt;
+    S._d = (S._d || []).concat((Wx * .0025 - n * .12 - .01) - a).slice(-12);
+    if (S._d.length === 12 && S._d.reduce((x, y) => x + y, 0) > .6 && S.batt > .5 && S.batt < 99) f.push('Battery losing charge faster than expected: possible battery fault');
+  } else if ((S.faults || []).some(m => m.startsWith('Battery losing'))) f.push('Battery losing charge faster than expected: possible battery fault');
+  if (S.tank < 15) f.push('Tank critical');
+  S.zones.forEach((z, i) => { if (z.ph < 5.5) f.push(`Zone ${i+1} soil too acidic (pH ${z.ph.toFixed(1)})`); else if (z.ph > 7.5) f.push(`Zone ${i+1} soil too alkaline (pH ${z.ph.toFixed(1)})`); });
+  if (S.sun === 0 && S.auto) f.push('Night: no solar, running on battery');
+  S.faults = f; const known = S._known = S._known || {};
+  f.forEach(m => { const k = key(m); if (!known[k]) { known[k] = 1; if (m.startsWith('Night')) notify(m, 'info'); else if (m !== 'Tank critical' && m !== 'Battery low') notify('FAULT: ' + m); } });
+  Object.keys(known).forEach(k => { if (!f.some(m => key(m) === k)) delete known[k]; });
+}
 function refill() { S.tank = 100; log('SYS', 'tank', 'refill valve open, level 100%', '#8be36b'); tick(true); }
 function togglePres() { document.documentElement.classList.toggle('pres'); $('presBtn').classList.toggle('on'); }
 function drought() { clearInterval(demo); demo = setInterval(() => { const z = S.zones[1]; if (z.m > 18) setMoist(1, z.m - 2); else clearInterval(demo); }, 120); }
@@ -175,7 +207,7 @@ scene.addEventListener('pointerdown', e => { const t = e.target.closest('[data-d
 window.addEventListener('pointermove', e => drag !== null && move(e)); window.addEventListener('pointerup', () => drag = null);
 function move(e) {
   const r = scene.getBoundingClientRect(), y = (e.clientY - r.top) * 570 / r.height, c = v => Math.max(0, Math.min(100, Math.round(v)));
-  if (drag === 'sun') { S.sun = c((220 - y) / 1.8); tick(true); } else setMoist(+drag, c((SOIL_TOP + SOIL_H - y) / (SOIL_H / 100)));
+  if (drag === 'sun') { S.auto = false; S.sun = c((220 - y) / 1.8); tick(true); } else setMoist(+drag, c((SOIL_TOP + SOIL_H - y) / (SOIL_H / 100)));
 }
 
 /* ---------- Telemetry: JSON log + packet flying mast -> cloud ---------- */
@@ -206,7 +238,8 @@ function notify(msg, type = 'warn') {
 
 /* ---------- Simulation step (500 ms, plus instantly on every drag) ---------- */
 function tick(instant) {
-  const V = S.sun ? 12.5 + 7 * S.sun / 100 : 0, I = 6 * S.sun / 100, W = V * I; let n = 0;
+  if (!instant && S.auto) { S.clock = (S.clock + .05) % 24; S.sun = Math.max(0, Math.round(100 * Math.sin(Math.PI * (S.clock - 6) / 12))); }   // a full day = 4 minutes
+  const V = S.sun ? 12.5 + 7 * S.sun / 100 : 0, I = 6 * S.sun / 100, Wx = V * I, W = Wx * (S.panelFault ? .2 : 1); let n = 0;
   S.zones.forEach((z, i) => {
     if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
     const p = pumping(z);
@@ -220,10 +253,11 @@ function tick(instant) {
     if (p !== z.p) { z.p = p; send(i); if (!p && z.m >= STOP) notify(`Zone ${i+1} restored to ${Math.round(z.m)}% moisture`, 'info'); }
     if (!instant) hist[i].push(z.m); if (hist[i].length > 60) hist[i].shift();
   });
-  if (!instant) S.batt = Math.max(0, Math.min(100, S.batt + W * .0025 - n * .12 - .01));        // solar charge minus pump load
+  if (!instant) S.batt = Math.max(0, Math.min(100, S.batt + W * .0025 - n * .12 - .01 - (S.battFault ? .12 : 0)));        // solar charge minus pump load
   if (S.tank < 15 && !S.lowTank) { S.lowTank = true; notify('Tank level critical: refill soon'); } if (S.tank > 25) S.lowTank = false;
   if (S.batt < 20 && !S.lowBatt) { S.lowBatt = true; notify('Battery low: check sunlight'); } if (S.batt > 30) S.lowBatt = false;
   if (!instant && ++beat % 6 === 0) S.zones.forEach((z, i) => send(i));                           // 3 s heartbeat
+  checkFaults(Wx, W, n, instant); S.solarW = Math.round(W);
   render(V, I, W, n); pubState();
 }
 
@@ -239,6 +273,9 @@ function render(V, I, W, n) {
   const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
   $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
   $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
+  const hh = Math.floor(S.clock), mm = Math.floor((S.clock % 1) * 60);
+  $('sunBtn').textContent = (S.auto ? 'Sun: AUTO ' : 'Sun: MANUAL ') + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + (S.sun === 0 ? ' (night)' : '');
+  $('pfBtn').classList.toggle('on', !!S.panelFault); $('bfBtn').classList.toggle('on', !!S.battFault);
   document.querySelectorAll('#master [data-m]').forEach(x => x.classList.toggle('on', x.dataset.m === S.master));
   S.zones.forEach((z, i) => {
     const dry = z.m < LOW, bad = dry || z.p, m = Math.round(z.m), y = SOIL_TOP + SOIL_H - z.m * SOIL_H / 100, wilt = Math.max(0, Math.min(1, (STOP - z.m) / STOP));
@@ -252,6 +289,7 @@ function render(V, I, W, n) {
     $('fz' + i).classList.toggle('on', z.p); $('dr' + i).setAttribute('opacity', z.p ? 1 : 0);
     $('tm' + i).textContent = z.mode.toUpperCase(); $('bm' + i).classList.toggle('on', z.mode === 'manual');
     $('tv' + i).textContent = z.p ? 'VALVE OPEN' : 'VALVE OFF'; $('bv' + i).classList.toggle('on', z.p); $('bv' + i).style.opacity = z.mode === 'manual' ? 1 : .4;
+    $('ph' + i).textContent = z.ph.toFixed(1); $('ph' + i).style.color = z.ph < 5.5 || z.ph > 7.5 ? '#ff5d73' : '';
     $('cv' + i).textContent = m + '%'; $('cb' + i).style.width = m + '%'; $('cb' + i).style.background = dry ? '#ff5d73' : m < 45 ? '#ffc857' : COL[i];
     $('l' + i).setAttribute('points', hist[i].map((v, j) => `${(j * 300 / 59).toFixed(1)},${(110 - v * 1.1).toFixed(1)}`).join(' '));
   });
@@ -259,24 +297,25 @@ function render(V, I, W, n) {
 
 /* ---------- Live link to the deployed app: MQTT over WebSocket (public HiveMQ broker) ----------
    ROOM must match the one in live.js. Keep it long and random: anyone who knows it can read/write. */
-const ROOM = 'gakinya-rl-8h2q9x4m', BROKER = 'wss://broker.hivemq.com:8884/mqtt', T_STATE = `rootline/${ROOM}/state`, T_EVT = `rootline/${ROOM}/events`;
+const ROOM = 'gakinya-rl-8h2q9x4m', BROKER = 'wss://broker.hivemq.com:8884/mqtt', T_STATE = `rootline/${ROOM}/state`, T_EVT = `rootline/${ROOM}/events`, T_CMD = `rootline/${ROOM}/cmd`;
 let net = null, lastPub = 0;
 const setNet = (txt, c) => { $('net').textContent = txt; $('net').style.color = c; };
 try {
   net = mqtt.connect(BROKER, { clientId: 'twin-' + Math.random().toString(16).slice(2, 8), reconnectPeriod: 2000 });
-  net.on('connect', () => { setNet('app link: LIVE', '#8be36b'); pubState(true); });
+  net.on('connect', () => { setNet('app link: LIVE', '#8be36b'); net.subscribe(T_CMD); pubState(true); });
+  net.on('message', (t, b) => { if (t === T_CMD) { try { handleCmd(JSON.parse(b.toString())); } catch (e) {} } });
   net.on('reconnect', () => setNet('app link: reconnecting', '#ffc857'));
   net.on('error', () => setNet('app link: offline (twin still works)', '#ff5d73'));
 } catch (e) { setNet('app link: offline (twin still works)', '#ff5d73'); }
 function pubState(force) {                                // retained, so a phone that opens late gets the latest values
   const now = performance.now(); if (!net || !net.connected || (!force && now - lastPub < 250)) return; lastPub = now;
-  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain,
-    zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode })) }), { retain: true });
+  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain, clock: +S.clock.toFixed(2), auto: !!S.auto, solar: S.solarW || 0, faults: S.faults || [],
+    zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode, ph: +z.ph.toFixed(1) })) }), { retain: true });
 }
 function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }
 
 /* ---------- Remember the dashboard between visits ---------- */
-try { const sv = JSON.parse(localStorage.getItem(KEY)); if (sv && sv.zones && sv.zones.length === 3) { S = Object.assign(fresh(), sv); S.zones = S.zones.map(z => Object.assign({ mode:'auto', on:false, latch:false, alerted:false, p:false }, z)); } } catch (e) {}
+try { const sv = JSON.parse(localStorage.getItem(KEY)); if (sv && sv.zones && sv.zones.length === 3) { S = Object.assign(fresh(), sv); S.zones = S.zones.map(z => Object.assign({ mode:'auto', on:false, latch:false, alerted:false, p:false, force:0, ph:6.5 }, z)); } } catch (e) {}
 setInterval(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 1000);
 
 /* ---------- Boot ---------- */
