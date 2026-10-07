@@ -744,6 +744,14 @@ function resizeImage(file, max=1024){
 async function diagnose(file){
   if(!file) return;
   const el = id => document.getElementById(id);
+  // wipe the previous result so an old diagnosis never shows next to a new photo or an error
+  const wipe = () => {
+    lastScan = null;
+    ['scan-crop','scan-desc','scan-treat'].forEach(i => el(i).textContent = '');
+    el('scan-treat').parentElement.style.display = 'none';
+  };
+  wipe();
+  el('scan-preview').removeAttribute('src');
   el('scan-icon').style.display = 'none';
   el('scan-preview').style.display = 'block';
   el('scan-hint').textContent = 'Analysing leaf…';
@@ -764,6 +772,7 @@ async function diagnose(file){
     el('scan-crop').textContent = 'Crop: ' + d.crop;
     el('scan-desc').textContent = d.description;
     el('scan-treat').textContent = d.treatment;
+    el('scan-treat').parentElement.style.display = '';
     el('scan-hint').textContent = 'Done. Take another photo anytime.';
     
     if(typeof saveScan === 'function') saveScan(d);
@@ -772,6 +781,7 @@ async function diagnose(file){
       pushAlert('warn','🍃', d.problem + ' detected on ' + d.crop, 'Leaf doctor scan · just now');
     }
   }catch(e){
+    wipe();
     el('scan-conf').textContent = 'Could not analyse';
     el('scan-title').textContent = 'Try again';
     el('scan-desc').textContent = (e instanceof TypeError)
