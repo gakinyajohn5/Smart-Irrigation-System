@@ -128,8 +128,8 @@ svg text{font-family:'IBM Plex Mono',monospace}
    ===================================================================== */
 const $ = id => document.getElementById(id), NS = 'http://www.w3.org/2000/svg';
 const COL = ['#8be36b', '#5ef2d6', '#c084fc'], NAMES = ['Greenhouses', 'Open Field', 'Orchard'];
-const PX = [330, 560, 790], LOW = 30, STOP = 50, SOIL_TOP = 300, SOIL_H = 220;
-const fresh = () => ({ sun: 80, clock: 12, auto: true, panelFault: false, battFault: false, faults: [], batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
+const PX = [330, 560, 790], LOW = 30, STOP = 50, SOIL_TOP = 300, SOIL_H = 220, IRR_H = 17, CRIT = 20;
+const fresh = () => ({ sun: 80, clock: 12, auto: true, temp: 26, rp0: 20, rp1: 30, askAns: null, rained: false, panelFault: false, battFault: false, faults: [], batt: 76, tank: 85, master: 'auto', lowTank: false, lowBatt: false,
   zones: [{m:62,t:29,h:71,bt:29,ph:6.4},{m:55,t:26,h:64,bt:26,ph:5.1},{m:58,t:24,h:66,bt:24,ph:6.8}].map(z => ({...z, mode:'auto', on:false, latch:false, alerted:false, p:false, force:0})) });
 const KEY = 'rootline-twin-state';
 let S = fresh(), hist = [[], [], []], pkts = 0, beat = 0, lastSend = [0, 0, 0], demo = null;
@@ -173,7 +173,7 @@ $('stars').innerHTML = Array.from({length: 40}, (_, k) => `<circle cx="${(k * 97
 
 /* ---------- Control logic ---------- */
 const canRun = () => S.tank > .5 && S.batt > 5;                    // lockout: empty tank or dead battery
-const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? z.m < 90 : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch : z.on);   // rain: auto/manual valves stay shut
+const wants = z => S.rain || S.master === 'off' ? false : S.master === 'on' ? z.m < 90 : (z.force || 0) > Date.now() ? true : (z.mode === 'auto' ? z.latch && !((S.skip || S.heat || S.hold2) && z.m >= CRIT) : z.on);   // rain: auto/manual valves stay shut
 const pumping = z => wants(z) && canRun();
 function setMoist(i, v) { S.zones[i].m = v; const t = performance.now(); if (t - lastSend[i] > 200) { lastSend[i] = t; send(i); } tick(true); }
 function toggleMode(i) { const z = S.zones[i]; z.mode = z.mode === 'auto' ? 'manual' : 'auto'; send(i); tick(true); }
@@ -186,6 +186,7 @@ function skipTo(h) { S.clock = h; S.auto = true; tick(true); }
 function toggleFault(k) { const f = k === 'panel' ? 'panelFault' : 'battFault'; S[f] = !S[f]; log('SYS', 'fault', `${k} fault ${S[f] ? 'injected' : 'cleared'}`, '#ff5d73'); tick(true); }
 function handleCmd(c) {
   if (!c || typeof c !== 'object') return;
+  if (c.type === 'decision') { S.askAns = c.irrigate ? 'yes' : 'no'; notify(c.irrigate ? 'Farmer chose to irrigate tonight despite rain tomorrow' : 'Farmer chose to skip irrigation: rain expected tomorrow', 'info'); tick(true); return; }
   const i = +c.zone, z = S.zones[i]; if (!z) return;
   if (c.type === 'irrigate') {
     log('SUB', 'farm/cmd/irrigate', JSON.stringify(c), '#ffc857'); fly('#ffc857', true);
@@ -193,8 +194,8 @@ function handleCmd(c) {
     if (z.m >= 90) { notify(`App irrigation refused for Zone ${i+1}: soil already saturated (${Math.round(z.m)}%)`); return; }
     if (S.master === 'off') { notify('App irrigation refused: master switch is OFF'); return; }
     if (!canRun()) { notify('App irrigation refused: ' + (S.tank <= .5 ? 'tank empty' : 'battery dead')); return; }
-    z.force = Date.now() + Math.min(60, Math.max(5, +c.seconds || 15)) * 1000;
-    notify(`Zone ${i+1} irrigation started from the app`, 'info'); tick(true);
+    z.force = Date.now() + Math.min(60, Math.max(5, +c.seconds || 15)) * (S.heat ? 500 : 1000);   // strong sun: half-length cycle
+    notify(`Zone ${i+1} irrigation started from the app` + (S.heat ? ' (shortened: strong sun)' : ''), 'info'); tick(true);
   } else if (c.type === 'stop') { z.force = 0; tick(true); }
 }
 function checkFaults(Wx, W, n, instant) {
@@ -213,6 +214,15 @@ function checkFaults(Wx, W, n, instant) {
   f.forEach(m => { const k = key(m); if (!known[k]) { known[k] = 1; if (m.startsWith('Night')) notify(m, 'info'); else if (m !== 'Tank critical' && m !== 'Battery low') notify('FAULT: ' + m); } });
   Object.keys(known).forEach(k => { if (!f.some(m => key(m) === k)) delete known[k]; });
 }
+function newDay() { S.rained = false; S.askAns = null; S.rp0 = S.rp1; S.rp1 = Math.round(Math.random() * 10) * 10; log('SYS', 'forecast', `new day: rain today ${S.rp0}%, tomorrow ${S.rp1}%`, '#5ef2d6'); }
+function advise() {
+  const a = S._adv = S._adv || {};
+  if (S.skip !== a.skip) { if (S.skip) notify(`Rain chance today ${S.rp0}%: irrigation skipped for the day, rechecked at ${IRR_H}:00`, 'info'); else if (a.skip && S.rp0 > 75 && !S.rained) notify(`It did not rain: irrigating now (${IRR_H}:00 round)`, 'info'); a.skip = S.skip; }
+  if (S.heat !== a.heat) { if (S.heat) notify(`Strong sun: irrigation held to cooler hours (soil under ${CRIT}% overrides)`, 'info'); a.heat = S.heat; }
+  if (S.ask && !a.ask) notify(`Rain likely tomorrow (${S.rp1}%): asking the farmer whether to irrigate tonight`, 'info'); a.ask = S.ask;
+}
+function setTemp(d) { S.temp = Math.max(15, Math.min(42, S.temp + d)); S.zones.forEach((z, i) => z.bt = S.temp + [3, 0, -2][i]); log('SYS', 'weather', 'ambient ' + S.temp + ' C', '#ffc857'); tick(true); }
+function bumpRain(k) { S['rp' + k] = (S['rp' + k] + 10) % 110; tick(true); }
 function refill() { S.tank = 100; log('SYS', 'tank', 'refill valve open, level 100%', '#8be36b'); tick(true); }
 function togglePres() { document.documentElement.classList.toggle('pres'); $('presBtn').classList.toggle('on'); }
 function drought() { clearInterval(demo); demo = setInterval(() => { const z = S.zones[1]; if (z.m > 18) setMoist(1, z.m - 2); else clearInterval(demo); }, 120); }
@@ -255,14 +265,19 @@ function notify(msg, type = 'warn') {
 
 /* ---------- Simulation step (500 ms, plus instantly on every drag) ---------- */
 function tick(instant) {
-  if (!instant && S.auto) { S.clock = (S.clock + .05) % 24; S.sun = Math.max(0, Math.round(100 * Math.sin(Math.PI * (S.clock - 6) / 12))); }   // a full day = 4 minutes
+  if (!instant && S.auto) { const c = S.clock + .05; if (c >= 24) newDay(); S.clock = c % 24; S.sun = Math.max(0, Math.round(100 * Math.sin(Math.PI * (S.clock - 6) / 12))); }   // a full day = 4 minutes
+  if (S.rain) S.rained = true;
+  S.skip = S.rp0 > 75 && (S.rained || S.clock < IRR_H);                 // rain likely today: skip, recheck at IRR_H
+  S.heat = S.sun >= 70;                                                 // strong sun: hold to cooler hours
+  S.hold2 = S.rp1 > 75 && S.clock >= IRR_H && S.askAns !== 'yes';      // rain likely tomorrow: farmer decides
+  S.ask = S.hold2 && S.askAns == null; advise();
   const V = S.sun ? 12.5 + 7 * S.sun / 100 : 0, I = 6 * S.sun / 100, Wx = V * I, W = Wx * (S.panelFault ? .2 : 1); let n = 0;
   S.zones.forEach((z, i) => {
     if (z.force && z.m >= 90) { z.force = 0; notify(`Zone ${i+1} irrigation stopped: soil saturated (${Math.round(z.m)}%)`, 'info'); }
     if (z.m < LOW) z.latch = true; else if (z.m >= STOP) z.latch = false;                    // hysteresis: on <30, off >=50
     const p = pumping(z);
     if (!instant) {
-      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else if (S.rain) z.m = Math.min(100, z.m + .6); else z.m = Math.max(0, z.m - .03);
+      if (p) { z.m = Math.min(100, z.m + 1.1); S.tank = Math.max(0, S.tank - .35); } else if (S.rain) z.m = Math.min(100, z.m + .6); else z.m = Math.max(0, z.m - .03 * (1 + S.sun / 100 + Math.max(0, S.temp - 26) / 10));   // sun and heat dry the soil faster
       z.t = Math.max(z.bt - 6, Math.min(z.bt + 3, z.t + (Math.random() - .5) * .3 - (S.rain ? .12 : 0) + (!S.rain && z.t < z.bt ? .05 : 0))); z.h = Math.min(99, 35 + z.m * .45 + (S.rain ? 18 : 0) + (Math.random() - .5) * 2);
     }
     if (p) n++;
@@ -292,6 +307,7 @@ function render(V, I, W, n) {
   const th = S.tank * 1.38; $('tFill').setAttribute('y', 278 - th); $('tFill').setAttribute('height', th); $('tPct').textContent = Math.round(S.tank) + '%'; $('aT').textContent = Math.round(S.tank) + '%';
   $('fMain').classList.toggle('on', n > 0); $('aP').textContent = n > 0 ? `RUNNING (${n})` : (S.rain ? 'RAIN LOCKOUT' : S.master !== 'off' && !canRun() ? 'LOCKOUT' : 'IDLE');
   $('rainG').setAttribute('opacity', S.rain ? 1 : 0); $('rainBtn').classList.toggle('on', !!S.rain); $('rainBtn').textContent = S.rain ? 'Stop rain' : 'Make it rain';
+  $('tmpBtn').textContent = `Hotter (${S.temp} C)`; $('rp0Btn').textContent = `Rain today ${S.rp0}%`; $('rp1Btn').textContent = `Rain tomorrow ${S.rp1}%`; $('rp0Btn').classList.toggle('on', S.rp0 > 75); $('rp1Btn').classList.toggle('on', S.rp1 > 75);
   const hh = Math.floor(S.clock), mm = Math.floor((S.clock % 1) * 60);
   $('sunBtn').textContent = (S.auto ? 'Sun: AUTO ' : 'Sun: MANUAL ') + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + (S.sun === 0 ? ' (night)' : '');
   $('pfBtn').classList.toggle('on', !!S.panelFault); $('bfBtn').classList.toggle('on', !!S.battFault);
@@ -328,7 +344,7 @@ try {
 } catch (e) { setNet('app link: offline (twin still works)', '#ff5d73'); }
 function pubState(force) {                                // retained, so a phone that opens late gets the latest values
   const now = performance.now(); if (!net || !net.connected || (!force && now - lastPub < 250)) return; lastPub = now;
-  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain, clock: +S.clock.toFixed(2), auto: !!S.auto, solar: S.solarW || 0, faults: S.faults || [],
+  net.publish(T_STATE, JSON.stringify({ ts: Date.now(), sun: S.sun, tank: +S.tank.toFixed(1), batt: +S.batt.toFixed(1), master: S.master, rain: !!S.rain, clock: +S.clock.toFixed(2), auto: !!S.auto, solar: S.solarW || 0, faults: S.faults || [], temp: S.temp, rp0: S.rp0, rp1: S.rp1, skip: !!S.skip, heat: !!S.heat, ask: !!S.ask, irrH: IRR_H,
     zones: S.zones.map(z => ({ m: +z.m.toFixed(1), t: +z.t.toFixed(1), h: Math.round(z.h), p: z.p ? 1 : 0, mode: z.mode, ph: +z.ph.toFixed(1) })) }), { retain: true });
 }
 function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSON.stringify({ level, msg })); }
@@ -337,6 +353,7 @@ function pubEvent(msg, level) { if (net && net.connected) net.publish(T_EVT, JSO
 try { const sv = JSON.parse(localStorage.getItem(KEY)); if (sv && sv.zones && sv.zones.length === 3) { S = Object.assign(fresh(), sv); S.zones = S.zones.map(z => Object.assign({ mode:'auto', on:false, latch:false, alerted:false, p:false, force:0, ph:6.5 }, z)); } } catch (e) {}
 setInterval(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 1000);
 
+$('rainBtn').parentNode.insertAdjacentHTML('beforeend', '<button class="btn" onclick="setTemp(-2)">Cooler</button><button class="btn" id="tmpBtn" onclick="setTemp(2)"></button><button class="btn" id="rp0Btn" onclick="bumpRain(0)"></button><button class="btn" id="rp1Btn" onclick="bumpRain(1)"></button>');
 /* ---------- Boot ---------- */
 log('SYS', 'esp32-01', 'boot OK, Wi-Fi connected, MQTT session open', '#8be36b');
 tick(true); setInterval(() => tick(false), 500);
