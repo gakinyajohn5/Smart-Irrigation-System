@@ -7,6 +7,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Smart Irrigation</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b2f1f">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -676,6 +679,18 @@ function checkTank(){
 }
 
 /* ---- AI leaf doctor & features extension ---- */
+
+/* Explain WHY a call to a Netlify function failed instead of blaming the internet */
+async function apiFail(res){
+  let msg = '';
+  try{ msg = (await res.json()).error || ''; }catch(_){}
+  if(res.status === 404) return 'The server functions are not running. Open the deployed Netlify site (or run "netlify dev"), not the plain HTML file.';
+  if(/API_KEY is not set/i.test(msg)) return 'Server setup missing: ' + msg.replace(/ in Netlify.*$/i,'') + '. Add it in Netlify > Site settings > Environment variables, then redeploy.';
+  if(/API key not valid|API_KEY_INVALID|\b40[13]\b/i.test(msg)) return 'The Gemini API key was rejected. Check that GEMINI_API_KEY is correct.';
+  if(/\b429\b|quota/i.test(msg)) return 'AI usage limit reached. Wait a minute and try again.';
+  return msg ? msg.slice(0,140) : 'Server error (' + res.status + ')';
+}
+
 function resizeImage(file, max=1024){
   return new Promise((resolve, reject)=>{
     const img = new Image();
@@ -708,7 +723,7 @@ async function diagnose(file){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ image: img.base64 })
     });
-    if(!res.ok) throw new Error('Server error');
+    if(!res.ok) throw new Error(await apiFail(res));
     const d = await res.json();
     el('scan-conf').textContent = d.confidence + '% match';
     el('scan-title').textContent = d.problem;
@@ -725,7 +740,9 @@ async function diagnose(file){
   }catch(e){
     el('scan-conf').textContent = 'Could not analyse';
     el('scan-title').textContent = 'Try again';
-    el('scan-desc').textContent = 'Check your internet connection and take a clearer, well-lit photo of one leaf.';
+    el('scan-desc').textContent = (e instanceof TypeError)
+      ? 'No internet connection. Connect and try again.'
+      : (e.message || 'Take a clearer, well-lit photo of one leaf.');
     el('scan-hint').textContent = 'Something went wrong';
   }
 }
@@ -885,10 +902,10 @@ async function sendChat(text){
         weather: weather ? `${weather.temp}°C, ` + (weather.hoursAway===-1 ? 'no rain in 6h' : `rain in ~${weather.hoursAway}h`) : 'unknown',
         date: new Date().toDateString(), lat: f.lat, lon: f.lon } })
     });
-    if(!res.ok) throw 0;
+    if(!res.ok) throw new Error(await apiFail(res));
     const { reply } = await res.json();
     wait.textContent = reply; chatHist.push({role:'model', text:reply});
-  }catch(e){ wait.textContent = 'Could not reach the assistant. Check your connection and try again.'; }
+  }catch(e){ wait.textContent = (e instanceof TypeError) ? 'No internet connection. Connect and try again.' : (e.message || 'The assistant is unavailable right now.'); chatHist.pop(); }
 }
 
 /* ---- Injected UI initialization ---- */
@@ -945,6 +962,7 @@ async function sendChat(text){
   <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
   <script src="live.js"></script>
   <script src="tour.js"></script>
+  <script>if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
 
 </body>
 </html>
