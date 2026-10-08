@@ -333,6 +333,7 @@ function tick(instant) {
     if (p !== z.p) { z.p = p; send(i);
       if (p) notify(`Irrigation started in Zone ${i+1}: ${z.force > Date.now() ? 'requested from the app' + (S.heat ? ' (shortened: strong sun)' : '') : z.mode === 'manual' ? 'manual valve' : S.master === 'on' ? 'pump forced on' : 'soil is dry'}. You can stop it from the app.`, 'info', { stop: i, keep: 1 });
       else if (z.stop > 0) notify(`Irrigation in Zone ${i+1} stopped by you; it stays off for ${z.stop} h`, 'info', { keep: 1 });
+      else if (S.rain) notify(`Irrigation stopped in Zone ${i+1}: it started raining (${Math.round(z.m)}% moisture)`, 'info', { keep: 1 });
       else if (z.m >= cr.stop) notify(`Irrigation done in Zone ${i+1}: moisture restored to ${Math.round(z.m)}%, enough for ${cr.name}`, 'info', { keep: 1 });
       else if (!inWin() && z.mode === 'auto' && z.m >= cr.crit && S.master !== 'on') notify(`Irrigation in Zone ${i+1} stopped: the ${S.sched} irrigation time ended (${Math.round(z.m)}% moisture)`, 'info', { keep: 1 });
       else notify(`Irrigation done in Zone ${i+1} (${Math.round(z.m)}% moisture)`, 'info', { keep: 1 }); }
