@@ -44,7 +44,7 @@
   window.setSimRain = function (on) {
     on = !!on; if (on === simRain) return; simRain = on;
     rainSoon = on || realRain(); renderWeather(); forecast();
-    if (on) pushAlert('info', '\uD83C\uDF27', 'Irrigation skipped \u2014 rain at the farm', 'Live from digital twin');
+    if (on) { pushAlert('info', '\uD83C\uDF27', 'It is raining now \u2014 irrigation skipped', 'Live from digital twin'); if (window.farmPopup) window.farmPopup('\uD83C\uDF27 It is raining now at the farm. Irrigation is skipped.'); }
   };
   setInterval(function () {                                  // soil absorbs rain in the app's own simulation
     if (simRain && typeof simOn !== 'undefined' && simOn && !irrigating) { moisture = Math.min(95, moisture + 1.5); paintRing(); }

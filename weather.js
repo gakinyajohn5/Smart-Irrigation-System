@@ -57,10 +57,12 @@
     ir(); var d = eff(), t = d[0]; if (!t) return;
     var rain = t.rain, sun = live && tw ? tw.sun : null;
     var sw = typeof currentLang !== 'undefined' && currentLang === 'sw';   // header shows the one weather readout
-    $('weather-icon').textContent = t.icon || icon(t.code);
+    var raining = !!(live && tw && tw.rain);                  // dashboard rain switch is on
+    $('weather-icon').textContent = raining ? '\uD83C\uDF27\uFE0F' : (t.icon || icon(t.code));
     $('lbl-temp').textContent = t.hi + '\u00B0';
-    $('lbl-rain').textContent = (sun != null ? (sw ? 'Jua ' : 'Sun ') + sun + '% \u00B7 ' : '') + (sw ? 'Mvua ' : 'Rain ') + rain + '%';
-    var msg = paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? (tw.sched === 'evening' ? 'Rain likely today: tonight\'s irrigation waits and runs only if it stays dry.' : 'Rain likely today: this morning\'s irrigation is skipped. It resumes the next morning if no rain comes.')
+    if (raining) $('lbl-rain').textContent = sw ? 'Mvua inanyesha sasa' : 'Raining now';
+    else $('lbl-rain').textContent = (sun != null ? (sw ? 'Jua ' : 'Sun ') + sun + '% \u00B7 ' : '') + (sw ? 'Mvua ' : 'Rain ') + rain + '%';
+    var msg = raining ? 'It is raining now: irrigation is blocked and the tank is filling from the rain.' : paused() ? 'Irrigation paused by you: ' + left() + ' left. Use Resume to restart it.' : live && tw && tw.skip ? (tw.sched === 'evening' ? 'Rain likely today: tonight\'s irrigation waits and runs only if it stays dry.' : 'Rain likely today: this morning\'s irrigation is skipped. It resumes the next morning if no rain comes.')
       : live && tw && tw.heat ? 'Strong sun: irrigation is held to cooler hours and cycles are shorter.'
       : !live && rain > 75 ? 'Rain likely today: irrigation will be skipped.' : 'Irrigation runs normally. Tap for the week.';
     $('wx-sub').textContent = msg;
