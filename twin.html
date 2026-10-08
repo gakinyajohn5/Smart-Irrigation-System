@@ -331,11 +331,11 @@ function tick(instant) {
     if (z.m < cr.low && !z.alerted) { z.alerted = true; notify(`WARNING: Zone ${i+1} Soil Dry for ${cr.name} - ${p ? 'Automatic Pump Engaged' : S.pause > 0 ? 'Irrigation paused by you' : waiting ? 'Waiting for the ' + S.sched + ' irrigation time' : 'Pump Unavailable (check power, tank or mode)'}`); }
     if (z.m >= cr.low + 5) z.alerted = false;
     if (p !== z.p) { z.p = p; send(i);
-      if (p) notify(`Irrigation started in Zone ${i+1}: ${z.force > Date.now() ? 'requested from the app' + (S.heat ? ' (shortened: strong sun)' : '') : z.mode === 'manual' ? 'manual valve' : S.master === 'on' ? 'pump forced on' : 'soil is dry'}. You can stop it from the app.`, 'info', { stop: i });
-      else if (z.stop > 0) notify(`Irrigation in Zone ${i+1} stopped by you; it stays off for ${z.stop} h`, 'info');
-      else if (z.m >= cr.stop) notify(`Zone ${i+1} restored to ${Math.round(z.m)}% moisture: enough for ${cr.name}, stopped`, 'info');
-      else if (!inWin() && z.mode === 'auto' && z.m >= cr.crit && S.master !== 'on') notify(`Irrigation in Zone ${i+1} stopped: the ${S.sched} irrigation time ended (${Math.round(z.m)}% moisture)`, 'info');
-      else notify(`Irrigation stopped in Zone ${i+1} (${Math.round(z.m)}% moisture)`, 'info'); }
+      if (p) notify(`Irrigation started in Zone ${i+1}: ${z.force > Date.now() ? 'requested from the app' + (S.heat ? ' (shortened: strong sun)' : '') : z.mode === 'manual' ? 'manual valve' : S.master === 'on' ? 'pump forced on' : 'soil is dry'}. You can stop it from the app.`, 'info', { stop: i, keep: 1 });
+      else if (z.stop > 0) notify(`Irrigation in Zone ${i+1} stopped by you; it stays off for ${z.stop} h`, 'info', { keep: 1 });
+      else if (z.m >= cr.stop) notify(`Irrigation done in Zone ${i+1}: moisture restored to ${Math.round(z.m)}%, enough for ${cr.name}`, 'info', { keep: 1 });
+      else if (!inWin() && z.mode === 'auto' && z.m >= cr.crit && S.master !== 'on') notify(`Irrigation in Zone ${i+1} stopped: the ${S.sched} irrigation time ended (${Math.round(z.m)}% moisture)`, 'info', { keep: 1 });
+      else notify(`Irrigation done in Zone ${i+1} (${Math.round(z.m)}% moisture)`, 'info', { keep: 1 }); }
     if (!instant) hist[i].push(z.m); if (hist[i].length > 60) hist[i].shift();
   });
   if (!instant) S.batt = Math.max(0, Math.min(100, S.batt + W * .0025 - n * .12 - .01 - (S.battFault ? .12 : 0)));        // solar charge minus pump load

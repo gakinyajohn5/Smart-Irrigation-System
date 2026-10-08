@@ -18,12 +18,13 @@
   document.addEventListener('click', function once() { document.removeEventListener('click', once); try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {} });
   var seen = {}, lastPop = 0;                                    // fewer notifications: warnings only, no repeats, no bursts
   function shouldNotify(d) {
-    var warn = d.level === 'warn', act = Number.isInteger(d.stop) || !!d.ask, now = Date.now(), k = String(d.msg).slice(0, 80);
+    var warn = d.level === 'warn', act = Number.isInteger(d.stop) || !!d.ask || !!d.keep, keep = !!d.keep || Number.isInteger(d.stop), now = Date.now(), k = String(d.msg).slice(0, 80);
     if (!warn && !act) return false;                             // routine info stays out of the farmer's way
-    if (seen[k] && now - seen[k] < 120000) return false;         // same message within 2 min
-    if (!warn && !d.ask && now - lastPop < 30000) return false;  // quiet period after any popup
+    if (seen[k] && now - seen[k] < (keep ? 10000 : 120000)) return false;   // same message again (10 s for irrigation start/done, 2 min otherwise)
+    if (!warn && !d.ask && !keep && now - lastPop < 30000) return false;   // quiet period after any popup
     seen[k] = now; lastPop = now; return true;
   }
+  window.farmPopup = function (m) { popup(false, m); };
   function popup(warn, msg, x) {                                 // alert card that pops out; warnings stay until dismissed
     if (!$('rl-pops')) {
       var st = document.createElement('style');

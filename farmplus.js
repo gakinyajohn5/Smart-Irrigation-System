@@ -105,7 +105,7 @@
     if (window.careGuard && !(opt && opt.confirmed)) { window.careGuard(i, function () { window.irrigateZone(i, { confirmed: true }); }); return; }   // plant-aware warning first
     var ok = window.sendTwinCmd && window.sendTwinCmd({ type: 'irrigate', zone: i, seconds: 15, confirm: !!(opt && opt.confirmed) }), msg;
     if (ok) msg = 'Irrigation command sent to ' + zn(i) + ' (15 s). The dashboard may refuse it if the tank is empty or power is out.';
-    else { msg = 'Dashboard not connected: irrigating in the app simulation.'; if (typeof simOn !== 'undefined' && simOn && !irrigating) { irrigating = true; irrigTicksLeft = 4; } }
+    else { msg = 'Dashboard not connected: irrigating in the app simulation.'; if (typeof simOn !== 'undefined' && simOn && !irrigating) { irrigating = true; irrigTicksLeft = 4; pushAlert('info', '\uD83D\uDCA7', 'Irrigation started \u2014 ' + zn(i), 'App simulation'); if (window.farmPopup) window.farmPopup('Irrigation started in ' + zn(i) + '.'); } }
     if ($('dt-msg')) $('dt-msg').textContent = msg;
   };
 })();
